@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+._*
+.AppleDouble
+__MACOSX/
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# XcodeGen project output
+/Kaygan.xcodeproj/
+
+# Xcode build products
+DerivedData/
+build/
+*.xcarchive
+*.xcresult
+*.dSYM
+*.dSYM.zip
+*.ipa
+*.hmap
+
+# Packaging
+*.dmg
+
+# Swift Package Manager build cache
+.build/
