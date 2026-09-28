@@ -6,7 +6,11 @@ struct KayganApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView(settings: appDelegate.settings, recorder: appDelegate.buttonRecorder)
+            SettingsView(
+                settings: appDelegate.settings,
+                recorder: appDelegate.buttonRecorder,
+                navigation: appDelegate.navigationEngine
+            )
         }
     }
 }

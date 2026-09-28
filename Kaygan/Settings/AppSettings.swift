@@ -9,6 +9,8 @@ final class AppSettings {
         static let speed = "speed"
         static let reverse = "reverse"
         static let toggle = "toggle"
+        static let navigationEnabled = "navigationEnabled"
+        static let reverseNavigation = "reverseNavigation"
     }
 
     static let minSpeed: Int32 = 1
@@ -17,12 +19,16 @@ final class AppSettings {
     static let defaultSpeed: Int32 = 3
     static let defaultReverse = false
     static let defaultToggle = false
+    static let defaultNavigationEnabled = true
+    static let defaultReverseNavigation = false
 
     var button: Int
     private(set) var isButtonConfigured: Bool
     var speed: Int32
     var reverse: Bool
     var toggle: Bool
+    var navigationEnabled: Bool
+    var reverseNavigation: Bool
 
     init(defaults: UserDefaults = .standard) {
         let savedButton = defaults.object(forKey: Key.button) as? Int
@@ -37,6 +43,8 @@ final class AppSettings {
         speed = min(max(savedSpeed, Self.minSpeed), Self.maxSpeed)
         reverse = (defaults.object(forKey: Key.reverse) as? NSNumber)?.boolValue ?? Self.defaultReverse
         toggle = (defaults.object(forKey: Key.toggle) as? NSNumber)?.boolValue ?? Self.defaultToggle
+        navigationEnabled = (defaults.object(forKey: Key.navigationEnabled) as? NSNumber)?.boolValue ?? Self.defaultNavigationEnabled
+        reverseNavigation = (defaults.object(forKey: Key.reverseNavigation) as? NSNumber)?.boolValue ?? Self.defaultReverseNavigation
     }
 
     func saveButton(to defaults: UserDefaults = .standard) {
@@ -55,6 +63,14 @@ final class AppSettings {
 
     func saveToggle(to defaults: UserDefaults = .standard) {
         defaults.set(toggle, forKey: Key.toggle)
+    }
+
+    func saveNavigationEnabled(to defaults: UserDefaults = .standard) {
+        defaults.set(navigationEnabled, forKey: Key.navigationEnabled)
+    }
+
+    func saveReverseNavigation(to defaults: UserDefaults = .standard) {
+        defaults.set(reverseNavigation, forKey: Key.reverseNavigation)
     }
 
     static func isValidButton(_ button: Int) -> Bool {

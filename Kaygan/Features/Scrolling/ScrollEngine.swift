@@ -9,9 +9,9 @@ enum ScrollEngineFailure: Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .eventTapCreation, .runLoopSourceCreation:
-            "Kaygan couldn't start scrolling"
+            "Kaygan couldn't start mouse features"
         case .eventTapRecovery:
-            "Kaygan stopped scrolling"
+            "Kaygan stopped processing mouse features"
         }
     }
 
@@ -20,9 +20,9 @@ enum ScrollEngineFailure: Equatable, LocalizedError {
         case .eventTapCreation:
             "Kaygan couldn't create the mouse event monitor. Check that Kaygan has Accessibility access in System Settings, then retry."
         case .runLoopSourceCreation:
-            "Kaygan couldn't activate the mouse monitor. Retry to start scrolling."
+            "Kaygan couldn't activate the mouse monitor. Retry to start mouse features."
         case .eventTapRecovery:
-            "macOS disabled the event monitor and Kaygan couldn't restore it. Retry to resume scrolling."
+            "macOS disabled the event monitor and Kaygan couldn't restore it. Retry to resume mouse features."
         }
     }
 }
@@ -42,6 +42,7 @@ enum ScrollTapInterruption: Sendable {
 final class ScrollEngine {
     var onTapInterruption: ((ScrollTapInterruption) -> Void)?
     var onOtherMouseDown: (@MainActor (Int) -> Bool)?
+    var onNavigationButtonDown: (@MainActor (Int) -> Bool)?
 
     private let settings: AppSettings
     private var tap: CFMachPort?
@@ -52,6 +53,7 @@ final class ScrollEngine {
     private var didDrag = false
     private var pendingButtonDown: CGEvent?
     private var anchor: CGPoint?
+    private var navigationButtonUps = Set<Int>()
 
     private var isScrolling: Bool {
         buttonHeld || buttonLatched
@@ -62,7 +64,7 @@ final class ScrollEngine {
     }
 
     var isDisabled: Bool {
-        settings.button == 0
+        settings.button == 0 && !settings.navigationEnabled
     }
 
     private var speed: Int64 {
@@ -106,7 +108,7 @@ final class ScrollEngine {
         self.tap = tap
         self.source = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        NSLog("Kaygan: scrolling enabled (button \(settings.button), speed \(settings.speed), reverse \(settings.reverse), toggle \(settings.toggle))")
+        NSLog("Kaygan: mouse features active (scroll button \(settings.button), navigation \(settings.navigationEnabled))")
         return .active
     }
 
@@ -138,6 +140,7 @@ final class ScrollEngine {
         didDrag = false
         pendingButtonDown = nil
         anchor = nil
+        navigationButtonUps.removeAll()
     }
 
     private func warpCursor(to point: CGPoint, scrolling: Bool) {
@@ -169,6 +172,19 @@ final class ScrollEngine {
             if onOtherMouseDown?(button) == true {
                 return Unmanaged.passUnretained(event)
             }
+
+            if settings.navigationEnabled,
+               button != settings.button,
+               (button == 4 || button == 5),
+               onNavigationButtonDown?(button) == true {
+                navigationButtonUps.insert(button)
+                return nil
+            }
+        }
+
+        if type == .otherMouseUp {
+            let button = Int(event.getIntegerValueField(.mouseEventButtonNumber)) + 1
+            if navigationButtonUps.remove(button) != nil { return nil }
         }
 
         switch type {

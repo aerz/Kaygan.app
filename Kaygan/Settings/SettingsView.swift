@@ -4,6 +4,7 @@ import AppKit
 private enum SettingsPane: String {
     // Keep the stored value stable so existing pane selection survives the label change.
     case scrolling = "general"
+    case navigation
     case about
 }
 
@@ -30,6 +31,7 @@ struct SettingsView: View {
 
     let settings: AppSettings
     let recorder: MouseButtonRecorder
+    let navigation: NavigationEngine
 
     var body: some View {
         HStack(spacing: 0) {
@@ -39,6 +41,8 @@ struct SettingsView: View {
                 switch selectedPane {
                 case .scrolling:
                     ScrollingSettingsView(settings: settings, recorder: recorder)
+                case .navigation:
+                    NavigationSettingsView(settings: settings, navigation: navigation)
                 case .about:
                     AboutSettingsView()
                 }
@@ -65,6 +69,7 @@ struct SettingsView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
             sidebarButton("Scrolling", systemImage: "arrow.up.and.down", pane: .scrolling)
+            sidebarButton("Navigation", systemImage: "arrow.left.arrow.right", pane: .navigation)
             sidebarButton("About", systemImage: "info.circle", pane: .about)
 
             Spacer()
@@ -89,7 +94,7 @@ struct SettingsView: View {
                     .frame(width: 16)
 
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .font(.system(size: 13, weight: .medium))
 
                 Spacer(minLength: 0)
             }
@@ -288,41 +293,15 @@ private struct ScrollingSettingsView: View {
 
             SectionDivider()
 
-            switchRow("Reverse scrolling direction", isOn: reverse)
+            SettingsToggleRow(title: "Reverse scrolling direction", isOn: reverse)
 
             SectionDivider()
 
-            switchRow(
-                "Click to toggle scrolling",
+            SettingsToggleRow(
+                title: "Click to toggle scrolling",
                 isOn: toggle,
                 caption: "Click the configured button once to start, and again to stop."
             )
-        }
-    }
-
-    private func switchRow(_ title: String, isOn: Binding<Bool>, caption: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityHidden(true)
-
-                Spacer(minLength: 8)
-
-                Toggle(title, isOn: isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(Palette.accent)
-                    .accessibilityLabel(title)
-                    .accessibilityHint(caption ?? "")
-            }
-
-            if let caption {
-                Text(caption)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
-            }
         }
     }
 
@@ -369,6 +348,97 @@ private struct ScrollingSettingsView: View {
         case 5: "Fastest"
         default: "Normal"
         }
+    }
+}
+
+private struct SettingsToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    var caption: String? = nil
+    var disabled = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.textPrimary)
+                    .accessibilityHidden(true)
+
+                Spacer(minLength: 8)
+
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(Palette.accent)
+                    .accessibilityLabel(title)
+                    .accessibilityHint(caption ?? "")
+                    .disabled(disabled)
+            }
+
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+    }
+}
+
+private struct NavigationSettingsView: View {
+    @Bindable var settings: AppSettings
+    @Bindable var navigation: NavigationEngine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            PaneHeader(
+                systemImage: nil,
+                title: "Navigation",
+                detail: "Use the side buttons to move back and forward through history."
+            )
+
+            SectionDivider()
+
+            SettingsToggleRow(
+                title: "Enable side-button navigation",
+                isOn: navigationEnabled,
+                caption: "Button 4 goes back; Button 5 goes forward."
+            )
+
+            SectionDivider()
+
+            SettingsToggleRow(
+                title: "Reverse button directions",
+                isOn: reverseNavigation,
+                disabled: !settings.navigationEnabled
+            )
+
+            if let statusMessage = navigation.statusMessage {
+                Text(statusMessage)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+    }
+
+    private var navigationEnabled: Binding<Bool> {
+        Binding(
+            get: { settings.navigationEnabled },
+            set: { value in
+                settings.navigationEnabled = value
+                settings.saveNavigationEnabled()
+            }
+        )
+    }
+
+    private var reverseNavigation: Binding<Bool> {
+        Binding(
+            get: { settings.reverseNavigation },
+            set: { value in
+                settings.reverseNavigation = value
+                settings.saveReverseNavigation()
+            }
+        )
     }
 }
 

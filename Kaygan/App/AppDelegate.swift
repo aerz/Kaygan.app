@@ -19,6 +19,7 @@ private enum FailureAction {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings: AppSettings
     let buttonRecorder = MouseButtonRecorder()
+    let navigationEngine: NavigationEngine
     private let engine: ScrollEngine
     private var accessibilityTimer: Timer?
     private var accessibilityGranted = false
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         let settings = AppSettings()
         self.settings = settings
+        navigationEngine = NavigationEngine(settings: settings)
         engine = ScrollEngine(settings: settings)
         super.init()
         engine.onTapInterruption = { [weak self] interruption in
@@ -38,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         engine.onOtherMouseDown = { [weak self] button in
             self?.buttonRecorder.recordIfCapturing(button: button) ?? false
+        }
+        engine.onNavigationButtonDown = { [weak self] button in
+            self?.navigationEngine.navigate(button: button) ?? false
         }
         buttonRecorder.onCapture = { [settings] button in
             settings.button = button
@@ -54,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard !engine.isDisabled else {
             state = .disabled
-            NSLog("Kaygan: both activation methods are disabled")
+            NSLog("Kaygan: scrolling and navigation are disabled")
             return
         }
 
@@ -70,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityTimer?.invalidate()
         accessibilityTimer = nil
         engine.stop()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        navigationEngine.refreshPermission()
     }
 
     private func installAccessibilityTimer() {
@@ -102,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = settings.speed
             _ = settings.reverse
             _ = settings.toggle
+            _ = settings.navigationEnabled
+            _ = settings.reverseNavigation
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.observeSettings()
@@ -111,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func settingsDidChange() {
+        navigationEngine.settingsDidChange()
         engine.settingsDidChange()
         reconcileEngineState()
     }
@@ -147,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startEngine() {
+        navigationEngine.settingsDidChange()
         state = .starting
         switch engine.start() {
         case .active:
@@ -184,7 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.stop()
         presentingFailure = true
         state = .failed(failure)
-        NSLog("Kaygan: scrolling unavailable (\(String(describing: failure)))")
+        NSLog("Kaygan: mouse features unavailable (\(String(describing: failure)))")
 
         let alert = NSAlert(error: failure)
         alert.alertStyle = .warning
