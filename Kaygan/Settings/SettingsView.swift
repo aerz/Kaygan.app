@@ -17,7 +17,6 @@ private enum Palette {
     static let tile = Color(white: 0.275)
     static let selection = Color(white: 0.305)
     static let hover = Color(white: 0.24)
-    static let hairline = Color(white: 0.31)
     static let fieldBorder = Color(white: 0.35)
     static let textPrimary = Color(white: 0.97)
     static let textSecondary = Color(white: 0.68)
@@ -71,6 +70,7 @@ struct SettingsView: View {
             sidebarButton("Scrolling", systemImage: "arrow.up.and.down", pane: .scrolling)
             sidebarButton("Navigation", systemImage: "arrow.left.arrow.right", pane: .navigation)
             sidebarButton("About", systemImage: "info.circle", pane: .about)
+                .padding(.top, 14)
 
             Spacer()
         }
@@ -174,19 +174,28 @@ private struct PaneHeader: View {
     }
 }
 
-private struct SectionDivider: View {
+private struct SettingsGroup<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
     var body: some View {
-        Rectangle()
-            .fill(Palette.hairline)
-            .frame(height: 1)
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
 private struct FieldSurface: ViewModifier {
+    let width: CGFloat
+
     func body(content: Content) -> some View {
         content
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
+            .frame(width: width, alignment: .leading)
             .frame(height: 34)
             .background(Palette.field, in: RoundedRectangle(cornerRadius: 8))
             .overlay {
@@ -197,8 +206,8 @@ private struct FieldSurface: ViewModifier {
 }
 
 private extension View {
-    func fieldSurface() -> some View {
-        modifier(FieldSurface())
+    func fieldSurface(width: CGFloat) -> some View {
+        modifier(FieldSurface(width: width))
     }
 }
 
@@ -207,63 +216,78 @@ private struct ScrollingSettingsView: View {
     let recorder: MouseButtonRecorder
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             PaneHeader(
                 systemImage: nil,
                 title: "Scrolling",
                 detail: "Move your mouse while holding the configured button, or click it to toggle scrolling."
             )
 
-            SectionDivider()
+            SettingsGroup {
+                activation
+            }
 
-            activation
-
-            SectionDivider()
-
-            scrolling
+            SettingsGroup {
+                scrolling
+            }
         }
     }
 
     private var activation: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Mouse button")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.textPrimary)
 
-                Spacer(minLength: 8)
+                Text(buttonDescription)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(2)
+                    .frame(height: 30, alignment: .topLeading)
+            }
 
-                Button(recorder.isCapturing ? "Cancel" : "Detect…") {
-                    if recorder.isCapturing {
-                        recorder.cancel()
-                    } else {
-                        recorder.start()
-                    }
+            Spacer(minLength: 8)
+
+            Button {
+                if recorder.isCapturing {
+                    recorder.cancel()
+                } else {
+                    recorder.start()
                 }
-                .buttonStyle(.bordered)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Palette.textPrimary)
+            } label: {
+                Text(recorder.isCapturing ? "Press a button…" : displayedButtonName)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.textPrimary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            Text(settings.isButtonConfigured ? buttonName : "Default (\(buttonName))")
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.textPrimary)
-                .fieldSurface()
-
-            if recorder.isCapturing {
-                Text("Press a middle or side button… Esc cancels.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
-            } else if !settings.isButtonConfigured {
-                Text("This default may not work with your mouse.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
-            }
+            .buttonStyle(.plain)
+            .fieldSurface(width: 144)
+            .accessibilityLabel(Text("Mouse button"))
+            .accessibilityValue(Text(recorder.isCapturing ? "Waiting for button" : displayedButtonName))
+            .accessibilityHint(Text(recorder.isCapturing ? "Click to cancel detection. Press Escape to cancel." : "Click to detect or change the scrolling button."))
         }
     }
 
+    private var displayedButtonName: String {
+        settings.isButtonConfigured ? buttonName : "Default (\(buttonName))"
+    }
+
+    private var buttonDescription: String {
+        if recorder.isCapturing {
+            return "Press a middle or side button… Esc cancels."
+        }
+
+        if settings.isButtonConfigured {
+            return "Click the field to detect a different button."
+        }
+
+        return "This default may not work with your mouse."
+    }
+
     private var scrolling: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     Text("Speed")
@@ -291,11 +315,7 @@ private struct ScrollingSettingsView: View {
                 .accessibilityValue(Text(speedName))
             }
 
-            SectionDivider()
-
             SettingsToggleRow(title: "Reverse scrolling direction", isOn: reverse)
-
-            SectionDivider()
 
             SettingsToggleRow(
                 title: "Click to toggle scrolling",
@@ -390,33 +410,33 @@ private struct NavigationSettingsView: View {
     @Bindable var navigation: NavigationEngine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             PaneHeader(
                 systemImage: nil,
                 title: "Navigation",
                 detail: "Use the side buttons to move back and forward through history."
             )
 
-            SectionDivider()
+            SettingsGroup {
+                VStack(alignment: .leading, spacing: 18) {
+                    SettingsToggleRow(
+                        title: "Enable side-button navigation",
+                        isOn: navigationEnabled,
+                        caption: "Button 4 goes back; Button 5 goes forward."
+                    )
 
-            SettingsToggleRow(
-                title: "Enable side-button navigation",
-                isOn: navigationEnabled,
-                caption: "Button 4 goes back; Button 5 goes forward."
-            )
+                    SettingsToggleRow(
+                        title: "Reverse button directions",
+                        isOn: reverseNavigation,
+                        disabled: !settings.navigationEnabled
+                    )
 
-            SectionDivider()
-
-            SettingsToggleRow(
-                title: "Reverse button directions",
-                isOn: reverseNavigation,
-                disabled: !settings.navigationEnabled
-            )
-
-            if let statusMessage = navigation.statusMessage {
-                Text(statusMessage)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
+                    if let statusMessage = navigation.statusMessage {
+                        Text(statusMessage)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                }
             }
         }
     }
