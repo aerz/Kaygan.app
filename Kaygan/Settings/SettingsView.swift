@@ -74,7 +74,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(.horizontal, 10)
-        .padding(.top, 42)
+        .padding(.top, 17)
         .padding(.bottom, 16)
         .frame(width: 180)
         .frame(maxHeight: .infinity, alignment: .topLeading)
