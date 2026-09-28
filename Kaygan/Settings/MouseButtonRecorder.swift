@@ -6,17 +6,18 @@ import Observation
 final class MouseButtonRecorder {
     private(set) var isCapturing = false
     private(set) var isCaptureUnavailable = false
-    @ObservationIgnored var onCapture: ((Int) -> Void)?
     @ObservationIgnored var onCaptureStateChange: (@MainActor (Bool) -> Void)?
     @ObservationIgnored var isEventTapActive: (@MainActor () -> Bool)?
     @ObservationIgnored private var monitors: [Any] = []
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var captureHandler: ((Int) -> Void)?
 
     private nonisolated static let captureTimeout: Duration = .seconds(15)
     private nonisolated static let escapeKeyCode: UInt16 = 53
 
-    func start() {
+    func start(onCapture: @escaping (Int) -> Void) {
         guard !isCapturing else { return }
+        captureHandler = onCapture
         isCaptureUnavailable = false
         onCaptureStateChange?(true)
         isCapturing = true
@@ -64,6 +65,7 @@ final class MouseButtonRecorder {
             NSEvent.removeMonitor(monitor)
         }
         monitors.removeAll()
+        captureHandler = nil
         isCapturing = false
         isCaptureUnavailable = false
         onCaptureStateChange?(false)
@@ -82,7 +84,8 @@ final class MouseButtonRecorder {
 
     private func record(button: Int) {
         guard isCapturing, AppSettings.isValidButton(button) else { return }
+        let handler = captureHandler
         cancel()
-        onCapture?(button)
+        handler?(button)
     }
 }

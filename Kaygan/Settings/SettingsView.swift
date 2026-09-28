@@ -42,7 +42,7 @@ struct SettingsView: View {
                 case .scrolling:
                     ScrollingSettingsView(settings: settings, recorder: recorder)
                 case .navigation:
-                    NavigationSettingsView(settings: settings, navigation: navigation)
+                    NavigationSettingsView(settings: settings, recorder: recorder, navigation: navigation)
                 case .about:
                     AboutSettingsView()
                 }
@@ -188,6 +188,66 @@ private struct SettingsGroup<Content: View>: View {
     }
 }
 
+private struct DetectionBadge {
+    let title: String
+    let symbol: String?
+    let color: Color
+}
+
+private struct ButtonDetectionRow: View {
+    let title: String
+    let description: String
+    let badge: DetectionBadge
+    let accessibilityHint: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.textPrimary)
+
+                Text(description)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(2)
+                    .frame(height: 30, alignment: .topLeading)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    if let symbol = badge.symbol {
+                        Image(systemName: symbol)
+                            .accessibilityHidden(true)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(badge.color)
+                            .accessibilityHidden(true)
+                    }
+
+                    Text(badge.title)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(badge.color)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(minWidth: 144)
+                .background(badge.color.opacity(0.13), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(title))
+            .accessibilityValue(Text(badge.title))
+            .accessibilityHint(Text(accessibilityHint))
+        }
+    }
+}
+
 private struct ScrollingSettingsView: View {
     @Bindable var settings: AppSettings
     let recorder: MouseButtonRecorder
@@ -211,77 +271,41 @@ private struct ScrollingSettingsView: View {
     }
 
     private var activation: some View {
-        let status = buttonStatus
-
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Mouse button")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.textPrimary)
-
-                Text(buttonDescription)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
-                    .lineLimit(2)
-                    .frame(height: 30, alignment: .topLeading)
-            }
-
-            Spacer(minLength: 8)
-
-            Button {
-                if recorder.isCapturing {
-                    recorder.cancel()
-                } else {
-                    recorder.start()
+        ButtonDetectionRow(
+            title: "Mouse button",
+            description: buttonDescription,
+            badge: buttonStatus,
+            accessibilityHint: buttonAccessibilityHint
+        ) {
+            if recorder.isCapturing {
+                recorder.cancel()
+            } else {
+                recorder.start { button in
+                    settings.button = button
+                    settings.saveButton()
                 }
-            } label: {
-                HStack(spacing: 8) {
-                    if let symbol = status.symbol {
-                        Image(systemName: symbol)
-                            .accessibilityHidden(true)
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(status.color)
-                            .accessibilityHidden(true)
-                    }
-
-                    Text(status.title)
-                        .lineLimit(1)
-                }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(status.color)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .frame(minWidth: 144)
-                .background(status.color.opacity(0.13), in: Capsule())
-                .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Mouse button"))
-            .accessibilityValue(Text(status.title))
-            .accessibilityHint(Text(buttonAccessibilityHint))
         }
     }
 
-    private var buttonStatus: (title: String, symbol: String?, color: Color) {
+    private var buttonStatus: DetectionBadge {
         if recorder.isCaptureUnavailable {
-            return ("Detection unavailable", "xmark.circle.fill", Palette.error)
+            return DetectionBadge(title: "Detection unavailable", symbol: "xmark.circle.fill", color: Palette.error)
         }
 
         if recorder.isCapturing {
-            return ("Detecting…", nil, Palette.textSecondary)
+            return DetectionBadge(title: "Detecting…", symbol: nil, color: Palette.textSecondary)
         }
 
         if settings.button == 0 {
-            return (buttonName, "minus.circle.fill", Palette.textSecondary)
+            return DetectionBadge(title: buttonName, symbol: "minus.circle.fill", color: Palette.textSecondary)
         }
 
         if settings.isButtonConfigured {
-            return (buttonName, "checkmark.circle.fill", Palette.success)
+            return DetectionBadge(title: buttonName, symbol: "checkmark.circle.fill", color: Palette.success)
         }
 
-        return ("Default (\(buttonName))", "exclamationmark.triangle.fill", Palette.warning)
+        return DetectionBadge(title: "Default (\(buttonName))", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
     }
 
     private var buttonAccessibilityHint: String {
@@ -433,7 +457,9 @@ private struct SettingsToggleRow: View {
 
 private struct NavigationSettingsView: View {
     @Bindable var settings: AppSettings
+    let recorder: MouseButtonRecorder
     @Bindable var navigation: NavigationEngine
+    @State private var detectedButton: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -448,7 +474,7 @@ private struct NavigationSettingsView: View {
                     SettingsToggleRow(
                         title: "Enable side-button navigation",
                         isOn: navigationEnabled,
-                        caption: "Button 4 goes back; Button 5 goes forward."
+                        caption: "Go back or forward with your mouse’s side buttons."
                     )
 
                     SettingsToggleRow(
@@ -464,7 +490,75 @@ private struct NavigationSettingsView: View {
                     }
                 }
             }
+
+            SettingsGroup {
+                ButtonDetectionRow(
+                    title: "Test side buttons",
+                    description: testDescription,
+                    badge: testStatus,
+                    accessibilityHint: testAccessibilityHint
+                ) {
+                    if recorder.isCapturing {
+                        recorder.cancel()
+                    } else {
+                        detectedButton = nil
+                        recorder.start { button in
+                            detectedButton = button
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private var testStatus: DetectionBadge {
+        if recorder.isCaptureUnavailable {
+            return DetectionBadge(title: "Detection unavailable", symbol: "xmark.circle.fill", color: Palette.error)
+        }
+
+        if recorder.isCapturing {
+            return DetectionBadge(title: "Detecting…", symbol: nil, color: Palette.textSecondary)
+        }
+
+        if let detectedButton {
+            if (4...5).contains(detectedButton) {
+                return DetectionBadge(title: "Button \(detectedButton) detected", symbol: "checkmark.circle.fill", color: Palette.success)
+            }
+
+            return DetectionBadge(title: "Button \(detectedButton)", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
+        }
+
+        return DetectionBadge(title: "Test buttons", symbol: "dot.radiowaves.left.and.right", color: Palette.textSecondary)
+    }
+
+    private var testDescription: String {
+        if recorder.isCaptureUnavailable {
+            return "Could not start button detection."
+        }
+
+        if recorder.isCapturing {
+            return "Press a side button… Esc cancels."
+        }
+
+        if let detectedButton {
+            return (4...5).contains(detectedButton)
+                ? "Button \(detectedButton) is mapped to Navigation."
+                : "Button \(detectedButton) is not mapped to Navigation."
+        }
+
+        return "Click Test buttons, then press a side button."
+    }
+
+    private var testAccessibilityHint: String {
+        if recorder.isCapturing {
+            return "Click to cancel the test. Press Escape to cancel."
+        }
+
+        if recorder.isCaptureUnavailable {
+            return "Click to retry button detection."
+        }
+
+        return "Click to test which auxiliary mouse button Kaygan receives."
     }
 
     private var navigationEnabled: Binding<Bool> {

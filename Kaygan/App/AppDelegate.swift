@@ -44,10 +44,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.onNavigationButtonDown = { [weak self] button in
             self?.navigationEngine.navigate(button: button) ?? false
         }
-        buttonRecorder.onCapture = { [settings] button in
-            settings.button = button
-            settings.saveButton()
-        }
         buttonRecorder.onCaptureStateChange = { [weak self] isCapturing in
             self?.engine.setSuspended(isCapturing)
         }
