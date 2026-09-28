@@ -41,6 +41,7 @@ enum ScrollTapInterruption: Sendable {
 @MainActor
 final class ScrollEngine {
     var onTapInterruption: ((ScrollTapInterruption) -> Void)?
+    var onOtherMouseDown: (@MainActor (Int) -> Bool)?
 
     private let settings: AppSettings
     private var tap: CFMachPort?
@@ -162,6 +163,14 @@ final class ScrollEngine {
     }
 
     private func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .otherMouseDown {
+            // AppKit local monitors can miss clicks consumed by a control-tracking loop.
+            let button = Int(event.getIntegerValueField(.mouseEventButtonNumber)) + 1
+            if onOtherMouseDown?(button) == true {
+                return Unmanaged.passUnretained(event)
+            }
+        }
+
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             resetState()

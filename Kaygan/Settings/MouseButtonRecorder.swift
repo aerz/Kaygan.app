@@ -6,6 +6,7 @@ import Observation
 final class MouseButtonRecorder {
     private(set) var isCapturing = false
     @ObservationIgnored var onCapture: ((Int) -> Void)?
+    @ObservationIgnored var onCaptureStateChange: (@MainActor (Bool) -> Void)?
     @ObservationIgnored private var monitors: [Any] = []
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
 
@@ -14,6 +15,7 @@ final class MouseButtonRecorder {
 
     func start() {
         guard !isCapturing else { return }
+        onCaptureStateChange?(true)
         isCapturing = true
 
         // A global monitor never receives events sent to Kaygan's own windows, so capture
@@ -52,6 +54,13 @@ final class MouseButtonRecorder {
         }
         monitors.removeAll()
         isCapturing = false
+        onCaptureStateChange?(false)
+    }
+
+    func recordIfCapturing(button: Int) -> Bool {
+        guard isCapturing else { return false }
+        record(button: button)
+        return true
     }
 
     private func track(_ monitor: Any?) {

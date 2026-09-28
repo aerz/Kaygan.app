@@ -36,12 +36,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.handleTapInterruption(interruption)
             }
         }
+        engine.onOtherMouseDown = { [weak self] button in
+            self?.buttonRecorder.recordIfCapturing(button: button) ?? false
+        }
         buttonRecorder.onCapture = { [settings] button in
             settings.button = button
             settings.saveButton()
         }
+        buttonRecorder.onCaptureStateChange = { [weak self] isCapturing in
+            self?.engine.setSuspended(isCapturing)
+        }
         observeSettings()
-        observeButtonRecorder()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -108,18 +113,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func settingsDidChange() {
         engine.settingsDidChange()
         reconcileEngineState()
-    }
-
-    private func observeButtonRecorder() {
-        withObservationTracking {
-            _ = buttonRecorder.isCapturing
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.observeButtonRecorder()
-                self.engine.setSuspended(self.buttonRecorder.isCapturing)
-            }
-        }
     }
 
     private func reconcileEngineState() {
