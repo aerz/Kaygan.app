@@ -67,6 +67,11 @@ final class ScrollEngine {
         settings.button == 0 && !settings.navigationEnabled
     }
 
+    var isEventTapActive: Bool {
+        guard let tap else { return false }
+        return CGEvent.tapIsEnabled(tap: tap)
+    }
+
     private var speed: Int64 {
         settings.reverse ? -Int64(settings.speed) : Int64(settings.speed)
     }

@@ -13,14 +13,15 @@ private enum SettingsPane: String {
 private enum Palette {
     static let canvasLevel = 48.0 / 255.0
     static let canvas = Color(white: canvasLevel)
-    static let field = Color(white: 0.25)
     static let tile = Color(white: 0.275)
     static let selection = Color(white: 0.305)
     static let hover = Color(white: 0.24)
-    static let fieldBorder = Color(white: 0.35)
     static let textPrimary = Color(white: 0.97)
     static let textSecondary = Color(white: 0.68)
     static let accent = Color(white: 0.97)
+    static let warning = Color.orange
+    static let success = Color.green
+    static let error = Color.red
 }
 
 struct SettingsView: View {
@@ -55,10 +56,8 @@ struct SettingsView: View {
         .background(Palette.canvas)
         .preferredColorScheme(.dark)
         .background(SettingsWindowChrome().allowsHitTesting(false))
-        .onChange(of: selectedPane) { _, pane in
-            if pane == .about {
-                recorder.cancel()
-            }
+        .onChange(of: selectedPane) { _, _ in
+            recorder.cancel()
         }
         .onDisappear {
             recorder.cancel()
@@ -189,28 +188,6 @@ private struct SettingsGroup<Content: View>: View {
     }
 }
 
-private struct FieldSurface: ViewModifier {
-    let width: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 12)
-            .frame(width: width, alignment: .leading)
-            .frame(height: 34)
-            .background(Palette.field, in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Palette.fieldBorder)
-            }
-    }
-}
-
-private extension View {
-    func fieldSurface(width: CGFloat) -> some View {
-        modifier(FieldSurface(width: width))
-    }
-}
-
 private struct ScrollingSettingsView: View {
     @Bindable var settings: AppSettings
     let recorder: MouseButtonRecorder
@@ -234,7 +211,9 @@ private struct ScrollingSettingsView: View {
     }
 
     private var activation: some View {
-        HStack(spacing: 12) {
+        let status = buttonStatus
+
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Mouse button")
                     .font(.system(size: 13, weight: .medium))
@@ -256,25 +235,72 @@ private struct ScrollingSettingsView: View {
                     recorder.start()
                 }
             } label: {
-                Text(recorder.isCapturing ? "Press a button…" : displayedButtonName)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Palette.textPrimary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 8) {
+                    if let symbol = status.symbol {
+                        Image(systemName: symbol)
+                            .accessibilityHidden(true)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(status.color)
+                            .accessibilityHidden(true)
+                    }
+
+                    Text(status.title)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(status.color)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(minWidth: 144)
+                .background(status.color.opacity(0.13), in: Capsule())
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .fieldSurface(width: 144)
             .accessibilityLabel(Text("Mouse button"))
-            .accessibilityValue(Text(recorder.isCapturing ? "Waiting for button" : displayedButtonName))
-            .accessibilityHint(Text(recorder.isCapturing ? "Click to cancel detection. Press Escape to cancel." : "Click to detect or change the scrolling button."))
+            .accessibilityValue(Text(status.title))
+            .accessibilityHint(Text(buttonAccessibilityHint))
         }
     }
 
-    private var displayedButtonName: String {
-        settings.isButtonConfigured ? buttonName : "Default (\(buttonName))"
+    private var buttonStatus: (title: String, symbol: String?, color: Color) {
+        if recorder.isCaptureUnavailable {
+            return ("Detection unavailable", "xmark.circle.fill", Palette.error)
+        }
+
+        if recorder.isCapturing {
+            return ("Detecting…", nil, Palette.textSecondary)
+        }
+
+        if settings.button == 0 {
+            return (buttonName, "minus.circle.fill", Palette.textSecondary)
+        }
+
+        if settings.isButtonConfigured {
+            return (buttonName, "checkmark.circle.fill", Palette.success)
+        }
+
+        return ("Default (\(buttonName))", "exclamationmark.triangle.fill", Palette.warning)
+    }
+
+    private var buttonAccessibilityHint: String {
+        if recorder.isCapturing {
+            return "Click to cancel detection. Press Escape to cancel."
+        }
+
+        if recorder.isCaptureUnavailable {
+            return "Click to retry detection. The current button setting is unchanged."
+        }
+
+        return "Click to detect or change the scrolling button."
     }
 
     private var buttonDescription: String {
+        if recorder.isCaptureUnavailable {
+            return "Could not start detection. The current button is unchanged."
+        }
+
         if recorder.isCapturing {
             return "Press a middle or side button… Esc cancels."
         }

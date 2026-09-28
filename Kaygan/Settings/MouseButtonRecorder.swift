@@ -5,8 +5,10 @@ import Observation
 @Observable
 final class MouseButtonRecorder {
     private(set) var isCapturing = false
+    private(set) var isCaptureUnavailable = false
     @ObservationIgnored var onCapture: ((Int) -> Void)?
     @ObservationIgnored var onCaptureStateChange: (@MainActor (Bool) -> Void)?
+    @ObservationIgnored var isEventTapActive: (@MainActor () -> Bool)?
     @ObservationIgnored private var monitors: [Any] = []
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
 
@@ -15,29 +17,38 @@ final class MouseButtonRecorder {
 
     func start() {
         guard !isCapturing else { return }
+        isCaptureUnavailable = false
         onCaptureStateChange?(true)
         isCapturing = true
 
         // A global monitor never receives events sent to Kaygan's own windows, so capture
         // listens on both paths; only the global handler is asynchronous. Buttons arrive
         // zero-based and Settings store them one-based.
-        track(NSEvent.addGlobalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
+        let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
             let button = event.buttonNumber + 1
             Task { @MainActor [weak self] in
                 self?.record(button: button)
             }
-        })
+        }
+        track(globalMonitor)
 
-        track(NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
+        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
             MainActor.assumeIsolated { self?.record(button: event.buttonNumber + 1) }
             return event
-        })
+        }
+        track(localMonitor)
 
         track(NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard event.keyCode == Self.escapeKeyCode else { return event }
             MainActor.assumeIsolated { self?.cancel() }
             return nil
         })
+
+        guard isEventTapActive?() == true || (globalMonitor != nil && localMonitor != nil) else {
+            cancel()
+            isCaptureUnavailable = true
+            return
+        }
 
         timeoutTask = Task { [weak self] in
             try? await Task.sleep(for: Self.captureTimeout)
@@ -54,6 +65,7 @@ final class MouseButtonRecorder {
         }
         monitors.removeAll()
         isCapturing = false
+        isCaptureUnavailable = false
         onCaptureStateChange?(false)
     }
 

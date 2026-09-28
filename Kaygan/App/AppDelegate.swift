@@ -51,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buttonRecorder.onCaptureStateChange = { [weak self] isCapturing in
             self?.engine.setSuspended(isCapturing)
         }
+        buttonRecorder.isEventTapActive = { [weak self] in
+            self?.engine.isEventTapActive == true
+        }
         observeSettings()
     }
 
