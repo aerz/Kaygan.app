@@ -19,6 +19,7 @@ private enum Palette {
     static let textPrimary = Color(white: 0.97)
     static let textSecondary = Color(white: 0.68)
     static let accent = Color(white: 0.97)
+    static let switchOn = Color(white: 0.48)
     static let warning = Color.orange
     static let success = Color.green
     static let error = Color.red
@@ -440,7 +441,7 @@ private struct SettingsToggleRow: View {
                 Toggle(title, isOn: $isOn)
                     .labelsHidden()
                     .toggleStyle(.switch)
-                    .tint(Palette.accent)
+                    .tint(Palette.switchOn)
                     .accessibilityLabel(title)
                     .accessibilityHint(caption ?? "")
                     .disabled(disabled)
