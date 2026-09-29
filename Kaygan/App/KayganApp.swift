@@ -7,9 +7,7 @@ struct KayganApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            KayganMenuBarContent {
-                appDelegate.prepareToOpenSettings()
-            }
+            KayganMenuBarContent()
         } label: {
             Image("MenuBarIcon")
                 .renderingMode(.template)
@@ -24,8 +22,7 @@ struct KayganApp: App {
             SettingsView(
                 settings: appDelegate.settings,
                 recorder: appDelegate.buttonRecorder,
-                navigation: appDelegate.navigationEngine,
-                setSettingsWindowOpen: appDelegate.setSettingsWindowOpen
+                navigation: appDelegate.navigationEngine
             )
         }
     }
@@ -34,11 +31,9 @@ struct KayganApp: App {
 private struct KayganMenuBarContent: View {
     @Environment(\.openSettings) private var openSettings
 
-    let prepareToOpenSettings: @MainActor () -> Void
-
     var body: some View {
         Button("Settings…") {
-            prepareToOpenSettings()
+            NSApp.activate()
             openSettings()
         }
 
