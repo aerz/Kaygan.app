@@ -583,16 +583,47 @@ private struct NavigationSettingsView: View {
 }
 
 private struct AboutSettingsView: View {
-    private var version: String? {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    private static let sourceURL = URL(string: "https://github.com/aerz/Kaygan.app")!
+
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
+    private var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
     }
 
     var body: some View {
-        PaneHeader(
-            systemImage: "cursorarrow",
-            title: "Kaygan",
-            detail: version.map { "Version \($0)" } ?? "Version unavailable"
-        )
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 14) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 52, height: 52)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Kaygan")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Palette.textPrimary)
+
+                    Text("Mouse-driven scrolling and back/forward navigation.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Version \(version) (\(build))")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            }
+
+            Link("Source Code", destination: Self.sourceURL)
+                .font(.system(size: 13))
+                .foregroundStyle(Palette.textPrimary)
+                .padding(.leading, 66)
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
