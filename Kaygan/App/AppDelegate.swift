@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var accessibilityTimer: Timer?
     private var accessibilityGranted = false
     private var presentingFailure = false
+    private var settingsWindowIsOpen = false
+    private var settingsReturnApplication: NSRunningApplication?
 
     private(set) var state: KayganState = .waitingForAccessibility
 
@@ -78,6 +80,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         navigationEngine.refreshPermission()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        guard !settingsWindowIsOpen else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.settingsWindowIsOpen else { return }
+            self.settingsReturnApplication = nil
+            self.applyActivationPolicy(.accessory)
+        }
+    }
+
+    func prepareToOpenSettings() {
+        guard !settingsWindowIsOpen else { return }
+
+        let menuBarOwner = NSWorkspace.shared.menuBarOwningApplication
+        settingsReturnApplication = menuBarOwner.flatMap {
+            $0.isEqual(NSRunningApplication.current) ? nil : $0
+        }
+        setSettingsWindowOpen(true)
+    }
+
+    func setSettingsWindowOpen(_ isOpen: Bool) {
+        settingsWindowIsOpen = isOpen
+
+        guard !isOpen else {
+            applyActivationPolicy(.regular)
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.settingsWindowIsOpen else { return }
+
+            if NSApp.isActive,
+               let returnApplication = self.settingsReturnApplication,
+               !returnApplication.isTerminated {
+                NSApp.yieldActivation(to: returnApplication)
+                if returnApplication.activate(from: .current, options: []) {
+                    return
+                }
+            }
+
+            self.settingsReturnApplication = nil
+            self.applyActivationPolicy(.accessory)
+        }
+    }
+
+    private func applyActivationPolicy(_ policy: NSApplication.ActivationPolicy) {
+        guard NSApp.activationPolicy() != policy else { return }
+        guard NSApp.setActivationPolicy(policy) else {
+            NSLog("Kaygan: could not change activation policy to \(policy)")
+            return
+        }
     }
 
     private func installAccessibilityTimer() {

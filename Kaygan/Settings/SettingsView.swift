@@ -33,6 +33,7 @@ struct SettingsView: View {
     let settings: AppSettings
     let recorder: MouseButtonRecorder
     let navigation: NavigationEngine
+    let setSettingsWindowOpen: @MainActor (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -60,8 +61,12 @@ struct SettingsView: View {
         .onChange(of: selectedPane) { _, _ in
             recorder.cancel()
         }
+        .onAppear {
+            setSettingsWindowOpen(true)
+        }
         .onDisappear {
             recorder.cancel()
+            setSettingsWindowOpen(false)
         }
     }
 
@@ -120,9 +125,7 @@ private struct SettingsWindowChrome: NSViewRepresentable {
         SettingsWindowChromeView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? SettingsWindowChromeView)?.configureWindow()
-    }
+    func updateNSView(_: NSView, context: Context) {}
 }
 
 @MainActor
