@@ -1,0 +1,21 @@
+{
+  "fill" : {
+    "automatic-gradient" : "srgb:0.07059,0.08235,0.09412,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "KayganOriginal.png",
+          "name" : "KayganOriginal"
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}
