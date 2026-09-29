@@ -6,10 +6,17 @@ struct KayganApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Kaygan", systemImage: "arrow.up.and.down") {
+        MenuBarExtra {
             KayganMenuBarContent {
                 appDelegate.prepareToOpenSettings()
             }
+        } label: {
+            Image("MenuBarIcon")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+                .accessibilityLabel("Kaygan")
         }
         .menuBarExtraStyle(.menu)
 
