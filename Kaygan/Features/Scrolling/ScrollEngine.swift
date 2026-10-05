@@ -240,8 +240,21 @@ final class ScrollEngine {
         }
     }
 
-    private func warpCursor(to point: CGPoint) {
-        _ = CGWarpMouseCursorPosition(point)
+    private func warpCursor(to point: CGPoint, scrolling: Bool) {
+        // Use separate suppression intervals during scrolling and cursor release.
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            _ = CGWarpMouseCursorPosition(point)
+            return
+        }
+
+        if scrolling {
+            source.localEventsSuppressionInterval = 10
+            _ = CGWarpMouseCursorPosition(point)
+        } else {
+            source.localEventsSuppressionInterval = 0
+            _ = CGWarpMouseCursorPosition(point)
+            source.localEventsSuppressionInterval = 0.25
+        }
     }
 
     private func matchesButton(_ event: CGEvent) -> Bool {
@@ -304,7 +317,7 @@ final class ScrollEngine {
         case .otherMouseDown where matchesButton(event):
             if !isScrolling {
                 anchor = event.location
-                warpCursor(to: event.location)
+                warpCursor(to: event.location, scrolling: true)
             }
             buttonHeld = true
             didDrag = false
@@ -335,7 +348,7 @@ final class ScrollEngine {
             didDrag = false
             if !isScrolling {
                 anchor = nil
-                warpCursor(to: event.location)
+                warpCursor(to: event.location, scrolling: false)
             }
             return shouldForwardUp ? Unmanaged.passUnretained(event) : nil
         case .mouseMoved where isScrolling, .otherMouseDragged where isScrolling:
