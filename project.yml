@@ -20,6 +20,9 @@ schemes:
     build:
       targets:
         Kaygan: all
+    test:
+      targets:
+        - KayganTests
     run:
       config: Debug
     archive:
@@ -44,4 +47,16 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         MARKETING_VERSION: "0.1.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.aerz.Kaygan
+        SWIFT_VERSION: "6.0"
+
+  KayganTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: KayganTests
+    dependencies:
+      - target: Kaygan
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerz.KayganTests
         SWIFT_VERSION: "6.0"

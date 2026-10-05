@@ -43,9 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine = ScrollEngine(settings: settings)
         super.init()
         engine.onTapInterruption = { [weak self] interruption in
-            Task { @MainActor [weak self] in
-                self?.handleTapInterruption(interruption)
-            }
+            self?.handleTapInterruption(interruption)
         }
         engine.onOtherMouseDown = { [weak self] button in
             self?.buttonRecorder.recordIfCapturing(button: button) ?? false
@@ -81,6 +79,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if accessibilityGranted { startEngine() }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.refreshAccessibility()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -91,10 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         navigationEngine.refreshPermission()
+        refreshAccessibility()
     }
 
     private func installAccessibilityTimer() {
-        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshAccessibility()
             }
@@ -202,7 +211,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state = .waitingForAccessibility
             KayganLogger.app.warning("Accessibility permission revoked; stopping mouse features")
         case .recoveryFailed:
-            presentFailure(.eventTapRecovery)
+            engine.stop()
+            state = .failed(.eventTapRecovery)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.state == .failed(.eventTapRecovery) else { return }
+                self.presentFailure(.eventTapRecovery)
+            }
         }
     }
 

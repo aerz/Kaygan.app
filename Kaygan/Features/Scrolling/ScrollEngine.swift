@@ -12,7 +12,7 @@ enum ScrollEngineFailure: Equatable, LocalizedError {
         case .eventTapCreation, .runLoopSourceCreation:
             "Kaygan couldn't start mouse features"
         case .eventTapRecovery:
-            "Kaygan stopped processing mouse features"
+            "Kaygan couldn't activate mouse features"
         }
     }
 
@@ -23,7 +23,7 @@ enum ScrollEngineFailure: Equatable, LocalizedError {
         case .runLoopSourceCreation:
             "Kaygan couldn't activate the mouse monitor. Retry to start mouse features."
         case .eventTapRecovery:
-            "macOS disabled the event monitor and Kaygan couldn't restore it. Retry to resume mouse features."
+            "Kaygan couldn't start or restore the mouse event monitor. Check Accessibility access in System Settings, then retry."
         }
     }
 }
@@ -39,6 +39,37 @@ enum ScrollTapInterruption: Sendable {
     case recoveryFailed
 }
 
+enum ScrollTapRecoveryAction: Equatable {
+    case cancelLatchedScroll
+    case stopForAccessibilityRevocation
+    case retryPrimaryTap
+    case stopAfterRepeatedTimeouts
+}
+
+enum ScrollTapKind: Equatable {
+    case primary
+    case latch
+}
+
+enum ScrollTapRecoveryPolicy {
+    static func action(
+        tapKind: ScrollTapKind,
+        accessibilityTrusted: Bool,
+        consecutiveTimeouts: Int,
+        maximumTimeouts: Int
+    ) -> ScrollTapRecoveryAction {
+        guard accessibilityTrusted else { return .stopForAccessibilityRevocation }
+        guard tapKind == .primary else { return .cancelLatchedScroll }
+        guard consecutiveTimeouts <= maximumTimeouts else { return .stopAfterRepeatedTimeouts }
+        return .retryPrimaryTap
+    }
+}
+
+private enum TapDisableReason: String {
+    case timeout
+    case userInput = "user input"
+}
+
 @MainActor
 final class ScrollEngine {
     private let logger = KayganLogger.scrolling
@@ -49,6 +80,8 @@ final class ScrollEngine {
     private let settings: AppSettings
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
+    private var latchTap: CFMachPort?
+    private var latchSource: CFRunLoopSource?
     private var buttonHeld = false
     private var buttonLatched = false
     private var isSuspended = false
@@ -56,6 +89,8 @@ final class ScrollEngine {
     private var pendingButtonDown: CGEvent?
     private var anchor: CGPoint?
     private var navigationButtonUps = Set<Int>()
+    private var consecutiveTimeoutCount = 0
+    private static let maxConsecutiveTimeouts = 3
 
     private var isScrolling: Bool {
         buttonHeld || buttonLatched
@@ -81,9 +116,10 @@ final class ScrollEngine {
     func start() -> ScrollEngineStartResult {
         guard tap == nil else { return .active }
         guard !isDisabled else { return .disabled }
+        consecutiveTimeoutCount = 0
 
-        var events = CGEventMask(1) << CGEventType.mouseMoved.rawValue
-        events |= CGEventMask(1) << CGEventType.otherMouseDown.rawValue
+        // Mouse movement is only needed while toggle scrolling is latched.
+        var events = CGEventMask(1) << CGEventType.otherMouseDown.rawValue
         events |= CGEventMask(1) << CGEventType.otherMouseDragged.rawValue
         events |= CGEventMask(1) << CGEventType.otherMouseUp.rawValue
 
@@ -91,7 +127,7 @@ final class ScrollEngine {
             guard let userInfo else { return Unmanaged.passUnretained(event) }
             return MainActor.assumeIsolated {
                 let engine = Unmanaged<ScrollEngine>.fromOpaque(userInfo).takeUnretainedValue()
-                return engine.handle(proxy: proxy, type: type, event: event)
+                return engine.handle(proxy: proxy, type: type, event: event, tapKind: .primary)
             }
         }
 
@@ -121,6 +157,8 @@ final class ScrollEngine {
 
     func stop() {
         resetState()
+        consecutiveTimeoutCount = 0
+        stopLatchTap()
         if let source {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             CFRunLoopSourceInvalidate(source)
@@ -144,27 +182,66 @@ final class ScrollEngine {
     private func resetState() {
         buttonHeld = false
         buttonLatched = false
+        stopLatchTap()
         didDrag = false
         pendingButtonDown = nil
         anchor = nil
         navigationButtonUps.removeAll()
     }
 
-    private func warpCursor(to point: CGPoint, scrolling: Bool) {
-        // Use separate suppression intervals during scrolling and cursor release.
-        guard let source = CGEventSource(stateID: .combinedSessionState) else {
-            _ = CGWarpMouseCursorPosition(point)
-            return
+    private func startLatchTap() -> Bool {
+        guard latchTap == nil else { return true }
+        let events = CGEventMask(1) << CGEventType.mouseMoved.rawValue
+        let callback: CGEventTapCallBack = { proxy, type, event, userInfo in
+            guard let userInfo else { return Unmanaged.passUnretained(event) }
+            return MainActor.assumeIsolated {
+                let engine = Unmanaged<ScrollEngine>.fromOpaque(userInfo).takeUnretainedValue()
+                return engine.handle(proxy: proxy, type: type, event: event, tapKind: .latch)
+            }
         }
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: events,
+            callback: callback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            reportLatchTapFailure("Could not create the latched scrolling event tap")
+            return false
+        }
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CFMachPortInvalidate(tap)
+            reportLatchTapFailure("Could not create the latched scrolling run loop source")
+            return false
+        }
+        self.latchTap = tap
+        self.latchSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        return true
+    }
 
-        if scrolling {
-            source.localEventsSuppressionInterval = 10
-            _ = CGWarpMouseCursorPosition(point)
-        } else {
-            source.localEventsSuppressionInterval = 0
-            _ = CGWarpMouseCursorPosition(point)
-            source.localEventsSuppressionInterval = 0.25
+    private func reportLatchTapFailure(_ message: String) {
+        logger.error("\(message, privacy: .public)")
+        DispatchQueue.main.async { [weak self] in
+            self?.onTapInterruption?(.recoveryFailed)
         }
+    }
+
+    private func stopLatchTap() {
+        if let latchSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), latchSource, .commonModes)
+            CFRunLoopSourceInvalidate(latchSource)
+            self.latchSource = nil
+        }
+        if let latchTap {
+            CFMachPortInvalidate(latchTap)
+            self.latchTap = nil
+        }
+    }
+
+    private func warpCursor(to point: CGPoint) {
+        _ = CGWarpMouseCursorPosition(point)
     }
 
     private func matchesButton(_ event: CGEvent) -> Bool {
@@ -172,7 +249,36 @@ final class ScrollEngine {
         !isSuspended && event.getIntegerValueField(.mouseEventButtonNumber) == settings.button - 1
     }
 
-    private func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    private func handle(
+        proxy: CGEventTapProxy,
+        type: CGEventType,
+        event: CGEvent,
+        tapKind: ScrollTapKind
+    ) -> Unmanaged<CGEvent>? {
+        switch type {
+        case .tapDisabledByUserInput:
+            if tapKind == .primary { consecutiveTimeoutCount = 0 }
+            handleDisabledTap(reason: .userInput, tapKind: tapKind)
+            return nil
+
+        case .tapDisabledByTimeout:
+            if tapKind == .primary { consecutiveTimeoutCount += 1 }
+            handleDisabledTap(reason: .timeout, tapKind: tapKind)
+            return nil
+
+        default:
+            break
+        }
+
+        guard AXIsProcessTrusted() else {
+            logger.warning("Received a mouse event after Accessibility permission was revoked; stopping event taps")
+            stop()
+            onTapInterruption?(.accessibilityRevoked)
+            return Unmanaged.passUnretained(event)
+        }
+
+        if tapKind == .primary { consecutiveTimeoutCount = 0 }
+
         if type == .otherMouseDown {
             // AppKit local monitors can miss clicks consumed by a control-tracking loop.
             let button = Int(event.getIntegerValueField(.mouseEventButtonNumber)) + 1
@@ -195,29 +301,10 @@ final class ScrollEngine {
         }
 
         switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            resetState()
-            guard AXIsProcessTrusted() else {
-                NSLog("Kaygan: event tap disabled; Accessibility revoked")
-                onTapInterruption?(.accessibilityRevoked)
-                break
-            }
-            guard let tap else {
-                NSLog("Kaygan: event tap disabled")
-                onTapInterruption?(.recoveryFailed)
-                break
-            }
-            CGEvent.tapEnable(tap: tap, enable: true)
-            if CGEvent.tapIsEnabled(tap: tap) {
-                NSLog("Kaygan: event tap restored")
-            } else {
-                NSLog("Kaygan: event tap disabled")
-                onTapInterruption?(.recoveryFailed)
-            }
         case .otherMouseDown where matchesButton(event):
             if !isScrolling {
                 anchor = event.location
-                warpCursor(to: event.location, scrolling: true)
+                warpCursor(to: event.location)
             }
             buttonHeld = true
             didDrag = false
@@ -227,8 +314,17 @@ final class ScrollEngine {
         case .otherMouseUp where matchesButton(event) && buttonHeld:
             buttonHeld = false
             if settings.toggle {
-                if didDrag { buttonLatched = false }
-                else { buttonLatched.toggle() }
+                if didDrag {
+                    buttonLatched = false
+                    stopLatchTap()
+                } else {
+                    if buttonLatched {
+                        buttonLatched = false
+                        stopLatchTap()
+                    } else {
+                        buttonLatched = startLatchTap()
+                    }
+                }
             }
             let didScroll = didDrag
             if !didScroll, let pendingButtonDown {
@@ -239,7 +335,7 @@ final class ScrollEngine {
             didDrag = false
             if !isScrolling {
                 anchor = nil
-                warpCursor(to: event.location, scrolling: false)
+                warpCursor(to: event.location)
             }
             return shouldForwardUp ? Unmanaged.passUnretained(event) : nil
         case .mouseMoved where isScrolling, .otherMouseDragged where isScrolling:
@@ -266,5 +362,48 @@ final class ScrollEngine {
         }
 
         return Unmanaged.passUnretained(event)
+    }
+
+    private func handleDisabledTap(reason: TapDisableReason, tapKind: ScrollTapKind) {
+        resetState()
+
+        switch ScrollTapRecoveryPolicy.action(
+            tapKind: tapKind,
+            accessibilityTrusted: AXIsProcessTrusted(),
+            consecutiveTimeouts: consecutiveTimeoutCount,
+            maximumTimeouts: Self.maxConsecutiveTimeouts
+        ) {
+        case .cancelLatchedScroll:
+            logger.warning("Latched scrolling event tap disabled by \(reason.rawValue, privacy: .public); toggle cancelled")
+        case .stopForAccessibilityRevocation:
+            logger.warning("Event tap disabled by \(reason.rawValue, privacy: .public); Accessibility permission is revoked")
+            stop()
+            onTapInterruption?(.accessibilityRevoked)
+        case .stopAfterRepeatedTimeouts:
+            logger.error("Event tap exceeded the limit of \(Self.maxConsecutiveTimeouts) consecutive timeouts; stopping")
+            stop()
+            onTapInterruption?(.recoveryFailed)
+        case .retryPrimaryTap:
+            guard let tap else {
+                logger.error("Event tap disabled by \(reason.rawValue, privacy: .public); primary tap is unavailable")
+                stop()
+                onTapInterruption?(.recoveryFailed)
+                return
+            }
+
+            CGEvent.tapEnable(tap: tap, enable: true)
+            guard CGEvent.tapIsEnabled(tap: tap) else {
+                logger.error("Could not re-enable the event tap after \(reason.rawValue, privacy: .public)")
+                stop()
+                onTapInterruption?(.recoveryFailed)
+                return
+            }
+
+            if reason == .timeout {
+                logger.warning("Primary event tap restored after timeout (attempt \(self.consecutiveTimeoutCount) of \(Self.maxConsecutiveTimeouts)); interrupted gesture cancelled")
+            } else {
+                logger.warning("Primary event tap restored after user input disabled it; interrupted gesture cancelled")
+            }
+        }
     }
 }
