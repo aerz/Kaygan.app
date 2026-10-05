@@ -283,7 +283,7 @@ final class ScrollEngine {
             break
         }
 
-        guard AXIsProcessTrusted() else {
+        guard AXIsProcessTrustedWithOptions(nil) else {
             logger.warning("Received a mouse event after Accessibility permission was revoked; stopping event taps")
             stop()
             onTapInterruption?(.accessibilityRevoked)
@@ -382,7 +382,7 @@ final class ScrollEngine {
 
         switch ScrollTapRecoveryPolicy.action(
             tapKind: tapKind,
-            accessibilityTrusted: AXIsProcessTrusted(),
+            accessibilityTrusted: AXIsProcessTrustedWithOptions(nil),
             consecutiveTimeouts: consecutiveTimeoutCount,
             maximumTimeouts: Self.maxConsecutiveTimeouts
         ) {
