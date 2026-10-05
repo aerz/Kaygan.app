@@ -7,7 +7,6 @@ import Observation
 @Observable
 final class NavigationEngine {
     private let settings: AppSettings
-    private var didRequestPostEventAccess = false
 
     private var hasPostEventAccess = false
     private(set) var statusMessage: String?
@@ -17,15 +16,16 @@ final class NavigationEngine {
     }
 
     func settingsDidChange() {
+        refreshPermission()
+    }
+
+    func refreshPermission() {
         guard settings.navigationEnabled else {
+            hasPostEventAccess = false
             statusMessage = nil
             return
         }
 
-        requestPostEventAccessIfNeeded()
-    }
-
-    func refreshPermission() {
         hasPostEventAccess = CGPreflightPostEventAccess()
         if hasPostEventAccess { statusMessage = nil }
     }
@@ -51,15 +51,6 @@ final class NavigationEngine {
         swipe.post(tap: .cghidEventTap)
         statusMessage = nil
         return true
-    }
-
-    private func requestPostEventAccessIfNeeded() {
-        refreshPermission()
-        guard !hasPostEventAccess, !didRequestPostEventAccess else { return }
-
-        didRequestPostEventAccess = true
-        _ = CGRequestPostEventAccess()
-        refreshPermission()
     }
 }
 

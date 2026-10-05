@@ -2,6 +2,8 @@
 
 Kaygan is a macOS app that scrolls when you hold a mouse button and move the mouse. In toggle mode, click once to start scrolling and click again to stop.
 
+Kaygan can also use your mouse’s side buttons to move back and forward through history.
+
 ## Requirements
 
 Kaygan runs on macOS 15 or later. To build it, you need Xcode 16 or later and XcodeGen. XcodeGen creates the `Kaygan.xcodeproj` project from `project.yml`.
@@ -28,7 +30,7 @@ To open the project in Xcode, run `open Kaygan.xcodeproj` after you generate it.
 ## Run
 
 1. In Xcode, select the `Kaygan` scheme and `My Mac`. Run the app.
-2. Grant Accessibility permission to Kaygan in `System Settings > Privacy & Security > Accessibility`. Kaygan needs this permission to read the mouse and send scroll events. macOS keeps this permission for each app.
+2. Grant Accessibility permission to Kaygan in `System Settings > Privacy & Security > Accessibility`. Kaygan uses this permission to handle mouse-button gestures and send scroll and navigation events. macOS keeps this permission for each app.
 3. After Kaygan starts scrolling, look in the Xcode debug console for `Kaygan: scrolling enabled`.
 
 If Kaygan cannot start or restore mouse input, it shows an alert to retry or quit.

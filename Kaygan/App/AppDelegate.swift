@@ -31,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let engine: ScrollEngine
     private var accessibilityTimer: Timer?
     private var accessibilityGranted = false
-    private var lastEventAccessStatus: String?
     private var presentingFailure = false
 
     private(set) var state: KayganState = .waitingForAccessibility
@@ -114,14 +113,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshAccessibility() {
         let granted = AXIsProcessTrusted()
-        let listenEventAccess = CGPreflightListenEventAccess()
-        let postEventAccess = CGPreflightPostEventAccess()
-        let eventAccessStatus = "Accessibility=\(granted), ListenEvent=\(listenEventAccess), PostEvent=\(postEventAccess)"
-        if eventAccessStatus != lastEventAccessStatus {
-            KayganLogger.app.info("Permission probes: \(eventAccessStatus, privacy: .public)")
-            lastEventAccessStatus = eventAccessStatus
-        }
-
         guard granted != accessibilityGranted else { return }
 
         accessibilityGranted = granted
