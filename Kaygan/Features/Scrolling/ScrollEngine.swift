@@ -1,5 +1,6 @@
 @preconcurrency import ApplicationServices
 import Foundation
+import os
 
 enum ScrollEngineFailure: Equatable, LocalizedError {
     case eventTapCreation
@@ -40,6 +41,7 @@ enum ScrollTapInterruption: Sendable {
 
 @MainActor
 final class ScrollEngine {
+    private let logger = KayganLogger.scrolling
     var onTapInterruption: ((ScrollTapInterruption) -> Void)?
     var onOtherMouseDown: (@MainActor (Int) -> Bool)?
     var onNavigationButtonDown: (@MainActor (Int) -> Bool)?
@@ -101,19 +103,19 @@ final class ScrollEngine {
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            NSLog("Kaygan: could not create the event tap")
+            logger.error("Could not create the event tap")
             return .failed(.eventTapCreation)
         }
         guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
             CFMachPortInvalidate(tap)
-            NSLog("Kaygan: could not create the event tap run loop source")
+            logger.error("Could not create the event tap run loop source")
             return .failed(.runLoopSourceCreation)
         }
 
         self.tap = tap
         self.source = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        NSLog("Kaygan: mouse features active (scroll button \(settings.button), navigation \(settings.navigationEnabled))")
+        logger.info("Mouse features active (scroll button: \(self.settings.button), navigation: \(self.settings.navigationEnabled))")
         return .active
     }
 

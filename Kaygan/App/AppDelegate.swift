@@ -1,6 +1,14 @@
 @preconcurrency import ApplicationServices
 import AppKit
 import Foundation
+import os
+
+enum KayganLogger {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.aerz.Kaygan"
+
+    static let app = Logger(subsystem: subsystem, category: "app")
+    static let scrolling = Logger(subsystem: subsystem, category: "scrolling")
+}
 
 enum KayganState: Equatable {
     case waitingForAccessibility
@@ -23,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let engine: ScrollEngine
     private var accessibilityTimer: Timer?
     private var accessibilityGranted = false
+    private var lastEventAccessStatus: String?
     private var presentingFailure = false
 
     private(set) var state: KayganState = .waitingForAccessibility
@@ -58,14 +67,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard !engine.isDisabled else {
             state = .disabled
-            NSLog("Kaygan: scrolling and navigation are disabled")
+            KayganLogger.app.info("Scrolling and navigation are disabled in settings")
             return
         }
 
         let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [promptKey: true] as CFDictionary
         accessibilityGranted = AXIsProcessTrustedWithOptions(options)
-        NSLog("Kaygan: Accessibility \(accessibilityGranted ? "granted" : "required")")
+        if accessibilityGranted {
+            KayganLogger.app.info("Accessibility permission granted")
+        } else {
+            KayganLogger.app.info("Accessibility permission required")
+        }
 
         if accessibilityGranted { startEngine() }
     }
@@ -92,13 +105,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshAccessibility() {
         let granted = AXIsProcessTrusted()
+        let listenEventAccess = CGPreflightListenEventAccess()
+        let postEventAccess = CGPreflightPostEventAccess()
+        let eventAccessStatus = "Accessibility=\(granted), ListenEvent=\(listenEventAccess), PostEvent=\(postEventAccess)"
+        if eventAccessStatus != lastEventAccessStatus {
+            KayganLogger.app.info("Permission probes: \(eventAccessStatus, privacy: .public)")
+            lastEventAccessStatus = eventAccessStatus
+        }
+
         guard granted != accessibilityGranted else { return }
 
         accessibilityGranted = granted
-        NSLog("Kaygan: Accessibility \(granted ? "granted" : "revoked")")
         if granted {
+            KayganLogger.app.info("Accessibility permission granted")
             if !presentingFailure && !engine.isDisabled { startEngine() }
         } else {
+            KayganLogger.app.warning("Accessibility permission revoked")
             engine.stop()
             state = .waitingForAccessibility
         }
@@ -178,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             engine.stop()
             accessibilityGranted = false
             state = .waitingForAccessibility
-            NSLog("Kaygan: Accessibility revoked")
+            KayganLogger.app.warning("Accessibility permission revoked; stopping mouse features")
         case .recoveryFailed:
             presentFailure(.eventTapRecovery)
         }
@@ -196,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.stop()
         presentingFailure = true
         state = .failed(failure)
-        NSLog("Kaygan: mouse features unavailable (\(String(describing: failure)))")
+        KayganLogger.app.error("Mouse features unavailable: \(String(describing: failure), privacy: .public)")
 
         let alert = NSAlert(error: failure)
         alert.alertStyle = .warning
