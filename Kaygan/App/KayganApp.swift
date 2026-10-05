@@ -22,7 +22,8 @@ struct KayganApp: App {
             SettingsView(
                 settings: appDelegate.settings,
                 recorder: appDelegate.buttonRecorder,
-                navigation: appDelegate.navigationEngine
+                navigation: appDelegate.navigationEngine,
+                generalSettings: appDelegate.generalSettings
             )
         }
     }

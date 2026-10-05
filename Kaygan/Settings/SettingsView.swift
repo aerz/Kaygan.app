@@ -2,7 +2,8 @@ import SwiftUI
 import AppKit
 
 private enum SettingsPane: String {
-    // Keep the stored value stable so existing pane selection survives the label change.
+    // Keep "general" assigned to Scrolling because earlier versions stored that value.
+    case general = "permissions"
     case scrolling = "general"
     case navigation
     case about
@@ -26,13 +27,14 @@ private enum Palette {
 }
 
 struct SettingsView: View {
-    @AppStorage("selectedSettingsPane") private var selectedPane: SettingsPane = .scrolling
+    @AppStorage("selectedSettingsPane") private var selectedPane: SettingsPane = .general
     @FocusState private var focusedPane: SettingsPane?
     @State private var hoveredPane: SettingsPane?
 
     let settings: AppSettings
     let recorder: MouseButtonRecorder
     let navigation: NavigationEngine
+    let generalSettings: GeneralSettingsModel
 
     var body: some View {
         HStack(spacing: 0) {
@@ -40,6 +42,8 @@ struct SettingsView: View {
 
             Group {
                 switch selectedPane {
+                case .general:
+                    GeneralSettingsView(model: generalSettings)
                 case .scrolling:
                     ScrollingSettingsView(settings: settings, recorder: recorder)
                 case .navigation:
@@ -67,6 +71,7 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
+            sidebarButton("General", systemImage: "gearshape", pane: .general)
             sidebarButton("Scrolling", systemImage: "arrow.up.and.down", pane: .scrolling)
             sidebarButton("Navigation", systemImage: "arrow.left.arrow.right", pane: .navigation)
             sidebarButton("About", systemImage: "info.circle", pane: .about)
@@ -451,6 +456,121 @@ private struct SettingsToggleRow: View {
                     .foregroundStyle(Palette.textSecondary)
             }
         }
+    }
+}
+
+private struct GeneralSettingsView: View {
+    @Bindable var model: GeneralSettingsModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PaneHeader(
+                systemImage: nil,
+                title: "General",
+                detail: "Manage Accessibility access and decide whether Kaygan opens when you sign in."
+            )
+
+            SettingsGroup {
+                accessibility
+            }
+
+            SettingsGroup {
+                launchAtLoginSection
+            }
+        }
+        .onAppear {
+            model.refreshAccessibility()
+            model.refreshLoginItemStatus()
+        }
+    }
+
+    private var accessibility: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Accessibility")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.textPrimary)
+
+                    Text("Kaygan uses this access to handle mouse gestures and post scroll and navigation events.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                if model.isAccessibilityTrusted {
+                    Label("Enabled", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.success)
+                        .accessibilityLabel("Accessibility")
+                        .accessibilityValue("Enabled")
+                } else {
+                    actionButton("Request Access") {
+                        model.requestAccessibility()
+                    }
+                    .accessibilityHint("Ask macOS to let Kaygan use Accessibility features.")
+                }
+            }
+        }
+    }
+
+    private var launchAtLoginSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Text("Launch at login")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.textPrimary)
+
+                Spacer(minLength: 8)
+
+                if model.launchAtLoginIsEnabled {
+                    Label("Enabled", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.success)
+                        .accessibilityLabel("Launch at login")
+                        .accessibilityValue("Enabled")
+                }
+
+                if let actionTitle = model.launchAtLoginActionTitle {
+                    actionButton(actionTitle) {
+                        model.performLaunchAtLoginAction()
+                    }
+                }
+            }
+
+            if let errorMessage = model.launchAtLoginErrorMessage {
+                Text("Could not update Login Items: \(errorMessage)")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Palette.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(GeneralActionButtonStyle())
+    }
+}
+
+private struct GeneralActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                Palette.selection.opacity(configuration.isPressed ? 0.72 : 1),
+                in: Capsule()
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

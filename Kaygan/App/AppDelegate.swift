@@ -1,4 +1,3 @@
-@preconcurrency import ApplicationServices
 import AppKit
 import Foundation
 import os
@@ -26,6 +25,7 @@ private enum FailureAction {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings: AppSettings
+    let generalSettings: GeneralSettingsModel
     let buttonRecorder = MouseButtonRecorder()
     let navigationEngine: NavigationEngine
     private let engine: ScrollEngine
@@ -37,7 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         let settings = AppSettings()
+        let generalSettings = GeneralSettingsModel()
         self.settings = settings
+        self.generalSettings = generalSettings
         navigationEngine = NavigationEngine(settings: settings)
         engine = ScrollEngine(settings: settings)
         super.init()
@@ -68,16 +70,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [promptKey: true] as CFDictionary
-        accessibilityGranted = AXIsProcessTrustedWithOptions(options)
-        if accessibilityGranted {
+        let granted = generalSettings.requestAccessibility()
+        accessibilityGranted = granted
+        if granted {
             KayganLogger.app.info("Accessibility permission granted")
         } else {
             KayganLogger.app.info("Accessibility permission required")
         }
 
-        if accessibilityGranted { startEngine() }
+        if granted { startEngine() }
 
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -98,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         navigationEngine.refreshPermission()
+        generalSettings.refreshLoginItemStatus()
         refreshAccessibility()
     }
 
@@ -112,10 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshAccessibility() {
-        let granted = AXIsProcessTrusted()
+        let granted = generalSettings.refreshAccessibility()
         guard granted != accessibilityGranted else { return }
-
         accessibilityGranted = granted
+
         if granted {
             KayganLogger.app.info("Accessibility permission granted")
             if !presentingFailure && !engine.isDisabled { startEngine() }
@@ -159,21 +161,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let wasDisabled = state == .disabled
         let granted: Bool
-        if wasDisabled, !AXIsProcessTrusted() {
-            let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            granted = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
+        if wasDisabled {
+            granted = generalSettings.requestAccessibility()
         } else {
-            granted = AXIsProcessTrusted()
+            granted = generalSettings.refreshAccessibility()
         }
+        accessibilityGranted = granted
 
         guard granted else {
-            accessibilityGranted = false
             engine.stop()
             state = .waitingForAccessibility
             return
         }
 
-        accessibilityGranted = true
         if state != .active {
             startEngine()
         }
@@ -199,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .accessibilityRevoked:
             engine.stop()
             accessibilityGranted = false
+            generalSettings.refreshAccessibility()
             state = .waitingForAccessibility
             KayganLogger.app.warning("Accessibility permission revoked; stopping mouse features")
         case .recoveryFailed:
@@ -213,8 +214,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func presentFailure(_ failure: ScrollEngineFailure) {
         guard !presentingFailure else { return }
-        guard AXIsProcessTrusted() else {
-            accessibilityGranted = false
+        accessibilityGranted = generalSettings.refreshAccessibility()
+        guard accessibilityGranted else {
             engine.stop()
             state = .waitingForAccessibility
             return
@@ -242,12 +243,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .quit:
             NSApp.terminate(nil)
         case .retry:
-            guard AXIsProcessTrusted() else {
-                accessibilityGranted = false
+            accessibilityGranted = generalSettings.refreshAccessibility()
+            guard accessibilityGranted else {
                 state = .waitingForAccessibility
                 return
             }
-            accessibilityGranted = true
             startEngine()
         }
     }

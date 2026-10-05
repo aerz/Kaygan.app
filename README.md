@@ -30,12 +30,12 @@ To open the project in Xcode, run `open Kaygan.xcodeproj` after you generate it.
 ## Run
 
 1. In Xcode, select the `Kaygan` scheme and `My Mac`. Run the app.
-2. Grant Accessibility permission to Kaygan in `System Settings > Privacy & Security > Accessibility`. Kaygan uses this permission to handle mouse-button gestures and send scroll and navigation events. macOS keeps this permission for each app.
+2. Grant Accessibility access when macOS prompts, or open Settings > General and click **Request Access**. Allow Kaygan in `System Settings > Privacy & Security > Accessibility`; Kaygan shows **Enabled** when macOS confirms the access. Kaygan uses this permission to handle mouse-button gestures and send scroll and navigation events.
 3. After Kaygan starts scrolling, look in the Xcode debug console for `Kaygan: scrolling enabled`.
 
 If Kaygan cannot start or restore mouse input, it shows an alert to retry or quit.
 
-Kaygan runs from the menu bar and opens no window at launch. Click the Kaygan menu bar icon to open Settings or quit. Kaygan has no Dock icon, including while Settings is open. Kaygan does not register itself to launch at login.
+Kaygan runs from the menu bar and opens no window at launch. Click the Kaygan menu bar icon to open Settings or quit. Kaygan has no Dock icon, including while Settings is open. You can optionally enable Launch at login in Settings > General.
 
 ## Settings
 
