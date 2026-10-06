@@ -29,8 +29,8 @@ private enum Palette {
 
 struct SettingsView: View {
     @AppStorage("selectedSettingsPane") private var selectedPane: SettingsPane = .general
-    @FocusState private var focusedPane: SettingsPane?
     @State private var hoveredPane: SettingsPane?
+    @State private var isKeyboardInputActive = false
 
     let settings: AppSettings
     let recorder: MouseButtonRecorder
@@ -44,7 +44,11 @@ struct SettingsView: View {
             Group {
                 switch selectedPane {
                 case .general:
-                    GeneralSettingsView(model: generalSettings, settings: settings)
+                    GeneralSettingsView(
+                        model: generalSettings,
+                        settings: settings,
+                        isKeyboardInputActive: isKeyboardInputActive
+                    )
                 case .scrolling:
                     ScrollingSettingsView(settings: settings, recorder: recorder)
                 case .navigation:
@@ -62,11 +66,23 @@ struct SettingsView: View {
         .background(Palette.canvas)
         .preferredColorScheme(.dark)
         .background(SettingsWindowChrome().allowsHitTesting(false))
+        .background {
+            SettingsInputMonitor { isKeyboardInput in
+                guard isKeyboardInputActive != isKeyboardInput else { return }
+                isKeyboardInputActive = isKeyboardInput
+            }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .onAppear {
+            isKeyboardInputActive = false
+        }
         .onChange(of: selectedPane) { _, _ in
             recorder.cancel()
         }
         .onDisappear {
             recorder.cancel()
+            isKeyboardInputActive = false
         }
     }
 
@@ -92,7 +108,6 @@ struct SettingsView: View {
 
         return Button {
             selectedPane = pane
-            focusedPane = pane
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: systemImage)
@@ -114,10 +129,74 @@ struct SettingsView: View {
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .focused($focusedPane, equals: pane)
-        .focusEffectDisabled(focusedPane != pane)
+        .focusEffectDisabled(!isKeyboardInputActive)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .onHover { hoveredPane = $0 ? pane : nil }
+    }
+}
+
+@MainActor
+private struct SettingsInputMonitor: NSViewRepresentable {
+    let onInputModeChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> SettingsInputMonitorView {
+        let view = SettingsInputMonitorView()
+        view.onInputModeChange = onInputModeChange
+        return view
+    }
+
+    func updateNSView(_ view: SettingsInputMonitorView, context: Context) {
+        view.onInputModeChange = onInputModeChange
+    }
+
+    static func dismantleNSView(_ view: SettingsInputMonitorView, coordinator: ()) {
+        view.removeEventMonitor()
+    }
+}
+
+@MainActor
+private final class SettingsInputMonitorView: NSView {
+    var onInputModeChange: ((Bool) -> Void)?
+
+    private weak var monitoredWindow: NSWindow?
+    private var eventMonitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        installEventMonitorIfNeeded()
+    }
+
+    func removeEventMonitor() {
+        if let eventMonitor {
+            NSEvent.removeMonitor(eventMonitor)
+            self.eventMonitor = nil
+        }
+        monitoredWindow = nil
+    }
+
+    private func installEventMonitorIfNeeded() {
+        guard let window else {
+            removeEventMonitor()
+            return
+        }
+        guard eventMonitor == nil || monitoredWindow !== window else { return }
+
+        removeEventMonitor()
+        monitoredWindow = window
+        eventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, self.isSettingsWindowEvent(event) else { return }
+                self.onInputModeChange?(event.type == .keyDown)
+            }
+            return event
+        }
+    }
+
+    private func isSettingsWindowEvent(_ event: NSEvent) -> Bool {
+        guard let monitoredWindow, let eventWindow = event.window else { return false }
+        return eventWindow === monitoredWindow || eventWindow.sheetParent === monitoredWindow
     }
 }
 
@@ -463,6 +542,7 @@ private struct SettingsToggleRow: View {
 private struct GeneralSettingsView: View {
     @Bindable var model: GeneralSettingsModel
     let settings: AppSettings
+    let isKeyboardInputActive: Bool
 
     @State private var appToEdit: AppExclusion?
     @State private var appSelectionError: String?
@@ -494,7 +574,8 @@ private struct GeneralSettingsView: View {
         .sheet(item: $appToEdit) { exclusion in
             AppExclusionEditor(
                 exclusion: exclusion,
-                settings: settings
+                settings: settings,
+                isKeyboardInputActive: isKeyboardInputActive
             )
                 .frame(width: 360)
                 .fixedSize(horizontal: false, vertical: true)
@@ -722,9 +803,11 @@ private struct AppExclusionEditor: View {
     @State private var exclusion: AppExclusion
 
     private let settings: AppSettings
+    private let isKeyboardInputActive: Bool
 
-    init(exclusion: AppExclusion, settings: AppSettings) {
+    init(exclusion: AppExclusion, settings: AppSettings, isKeyboardInputActive: Bool) {
         self.settings = settings
+        self.isKeyboardInputActive = isKeyboardInputActive
         _exclusion = State(initialValue: exclusion)
     }
 
@@ -786,6 +869,7 @@ private struct AppExclusionEditor: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled(!isKeyboardInputActive)
         .accessibilityLabel(Text(title))
         .accessibilityValue(Text(isOn.wrappedValue ? "On" : "Off"))
         .accessibilityHint(Text("Toggle this app exclusion."))
