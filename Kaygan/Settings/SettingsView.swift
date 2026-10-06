@@ -27,6 +27,15 @@ private enum Palette {
     static let error = Color.red
 }
 
+private enum SettingsSpacing {
+    static let compact: CGFloat = 4
+    static let inline: CGFloat = 8
+    static let row: CGFloat = 12
+    static let inset: CGFloat = 16
+    static let section: CGFloat = 20
+    static let spacious: CGFloat = 24
+}
+
 struct SettingsView: View {
     @AppStorage("selectedSettingsPane") private var selectedPane: SettingsPane = .general
     @State private var hoveredPane: SettingsPane?
@@ -87,18 +96,20 @@ struct SettingsView: View {
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
             sidebarButton("General", systemImage: "gearshape", pane: .general)
             sidebarButton("Scrolling", systemImage: "arrow.up.and.down", pane: .scrolling)
             sidebarButton("Navigation", systemImage: "arrow.left.arrow.right", pane: .navigation)
             sidebarButton("About", systemImage: "info.circle", pane: .about)
-                .padding(.top, 14)
+                .padding(.top, SettingsSpacing.inset)
 
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 17)
-        .padding(.bottom, 16)
+        .padding(.horizontal, SettingsSpacing.inline)
+        // Keep the first navigation row below the pane heading and clear of
+        // the traffic lights, measuring the margin inward from the window's safe area.
+        .safeAreaPadding(.top, 36)
+        .padding(.bottom, SettingsSpacing.inset)
         .frame(width: 180)
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
@@ -109,7 +120,7 @@ struct SettingsView: View {
         return Button {
             selectedPane = pane
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: SettingsSpacing.inline) {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 16)
@@ -121,7 +132,7 @@ struct SettingsView: View {
             }
             .foregroundStyle(isSelected ? Palette.textPrimary : Palette.textSecondary)
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 9)
             .background(
                 isSelected ? Palette.selection : Palette.hover.opacity(hoveredPane == pane ? 1 : 0),
                 in: RoundedRectangle(cornerRadius: 8)
@@ -233,7 +244,7 @@ private struct PaneHeader: View {
     let detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.row) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 17, weight: .medium))
@@ -243,7 +254,7 @@ private struct PaneHeader: View {
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Palette.textPrimary)
@@ -267,7 +278,7 @@ private struct SettingsGroup<Content: View>: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(SettingsSpacing.inset)
             .background(Palette.tile, in: RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -286,8 +297,8 @@ private struct ButtonDetectionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: SettingsSpacing.row) {
+            VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.textPrimary)
@@ -299,10 +310,10 @@ private struct ButtonDetectionRow: View {
                     .frame(height: 30, alignment: .topLeading)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: SettingsSpacing.inline)
 
             Button(action: action) {
-                HStack(spacing: 8) {
+                HStack(spacing: SettingsSpacing.inline) {
                     if let symbol = badge.symbol {
                         Image(systemName: symbol)
                             .accessibilityHidden(true)
@@ -337,7 +348,7 @@ private struct ScrollingSettingsView: View {
     let recorder: MouseButtonRecorder
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.section) {
             PaneHeader(
                 systemImage: nil,
                 title: "Scrolling",
@@ -421,14 +432,14 @@ private struct ScrollingSettingsView: View {
     }
 
     private var scrolling: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.row) {
+            VStack(alignment: .leading, spacing: SettingsSpacing.inline) {
+                HStack(spacing: SettingsSpacing.row) {
                     Text("Speed")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Palette.textPrimary)
 
-                    Spacer(minLength: 8)
+                    Spacer(minLength: SettingsSpacing.inline)
 
                     Text(speedName)
                         .font(.system(size: 13))
@@ -512,14 +523,14 @@ private struct SettingsToggleRow: View {
     var disabled = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
+            HStack(spacing: SettingsSpacing.row) {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityHidden(true)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: SettingsSpacing.inline)
 
                 Toggle(title, isOn: $isOn)
                     .labelsHidden()
@@ -549,7 +560,7 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: SettingsSpacing.section) {
                 PaneHeader(
                     systemImage: nil,
                     title: "General",
@@ -592,9 +603,9 @@ private struct GeneralSettingsView: View {
     }
 
     private var accessibility: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.row) {
+            HStack(spacing: SettingsSpacing.row) {
+                VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                     Text("Accessibility")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Palette.textPrimary)
@@ -605,7 +616,7 @@ private struct GeneralSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: SettingsSpacing.inline)
 
                 if model.isAccessibilityTrusted {
                     Label("Enabled", systemImage: "checkmark.circle.fill")
@@ -624,13 +635,13 @@ private struct GeneralSettingsView: View {
     }
 
     private var launchAtLoginSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.row) {
+            HStack(spacing: SettingsSpacing.row) {
                 Text("Launch at login")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.textPrimary)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: SettingsSpacing.inline)
 
                 if model.launchAtLoginIsEnabled {
                     Label("Enabled", systemImage: "checkmark.circle.fill")
@@ -657,7 +668,7 @@ private struct GeneralSettingsView: View {
     }
 
     private var appExclusionsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.row) {
             HStack {
                 Text("Disabled apps")
                     .font(.system(size: 13, weight: .medium))
@@ -685,7 +696,7 @@ private struct GeneralSettingsView: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(Palette.textSecondary)
             } else {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: SettingsSpacing.row) {
                     ForEach(settings.appExclusions) { exclusion in
                         AppExclusionRow(
                             exclusion: exclusion,
@@ -757,7 +768,7 @@ private struct AppExclusionRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: SettingsSpacing.inline) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: exclusion.applicationPath))
                 .resizable()
                 .interpolation(.high)
@@ -771,7 +782,7 @@ private struct AppExclusionRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: SettingsSpacing.inline)
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
@@ -812,8 +823,8 @@ private struct AppExclusionEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.section) {
+            HStack(spacing: SettingsSpacing.row) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: exclusion.applicationPath))
                     .resizable()
                     .interpolation(.high)
@@ -821,7 +832,7 @@ private struct AppExclusionEditor: View {
                     .frame(width: 36, height: 36)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                     Text(exclusion.displayName)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.textPrimary)
@@ -831,12 +842,12 @@ private struct AppExclusionEditor: View {
                 }
             }
 
-            VStack(spacing: 14) {
+            VStack(spacing: SettingsSpacing.row) {
                 exclusionToggle("Disable scrolling", isOn: $exclusion.scrollingDisabled)
                 exclusionToggle("Disable navigation", isOn: $exclusion.navigationDisabled)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: SettingsSpacing.inline) {
                 Spacer()
                 GeneralActionButton(title: "Cancel", role: .cancel) {
                     dismiss()
@@ -895,7 +906,7 @@ private struct NavigationSettingsView: View {
     @State private var detectedButton: Int?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.section) {
             PaneHeader(
                 systemImage: nil,
                 title: "Navigation",
@@ -903,7 +914,7 @@ private struct NavigationSettingsView: View {
             )
 
             SettingsGroup {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: SettingsSpacing.row) {
                     SettingsToggleRow(
                         title: "Enable side-button navigation",
                         isOn: navigationEnabled,
@@ -1027,8 +1038,8 @@ private struct AboutSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: SettingsSpacing.spacious) {
+            HStack(spacing: SettingsSpacing.row) {
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
                     .interpolation(.high)
@@ -1036,7 +1047,7 @@ private struct AboutSettingsView: View {
                     .frame(width: 52, height: 52)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                     Text("Kaygan")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Palette.textPrimary)
