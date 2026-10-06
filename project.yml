@@ -58,5 +58,6 @@ targets:
       - target: Kaygan
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.aerz.KayganTests
         SWIFT_VERSION: "6.0"
