@@ -218,7 +218,7 @@ private final class SettingsWindowChromeView: NSView {
     func configureWindow() {
         guard let window else { return }
 
-        window.styleMask.insert(.fullSizeContentView)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.backgroundColor = NSColor(calibratedWhite: Palette.canvasLevel, alpha: 1)
         window.title = ""
         window.titleVisibility = .hidden
