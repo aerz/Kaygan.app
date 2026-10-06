@@ -1028,6 +1028,7 @@ private struct NavigationSettingsView: View {
 
 private struct AboutSettingsView: View {
     private static let sourceURL = URL(string: "https://github.com/aerz/Kaygan.app")!
+    @State private var isSourceHovered = false
 
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
@@ -1052,7 +1053,7 @@ private struct AboutSettingsView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Palette.textPrimary)
 
-                    Text("Mouse-driven scrolling and back/forward navigation.")
+                    Text("A smoother, more natural mouse experience.")
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1063,10 +1064,25 @@ private struct AboutSettingsView: View {
                 }
             }
 
-            Link("Source Code", destination: Self.sourceURL)
+            Link(destination: Self.sourceURL) {
+                HStack(spacing: SettingsSpacing.compact) {
+                    Text("GitHub")
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .accessibilityHidden(true)
+                }
                 .font(.system(size: 13))
-                .foregroundStyle(Palette.textPrimary)
-                .padding(.leading, 66)
+                .foregroundStyle(
+                    isSourceHovered ? Palette.textPrimary.opacity(0.82) : Palette.textSecondary
+                )
+                .frame(minHeight: 28, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("GitHub")
+            .help("Open Kaygan’s source code repository on GitHub")
+            .onHover { isSourceHovered = $0 }
+            .pointerStyle(.link)
+            .padding(.leading, 66)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
