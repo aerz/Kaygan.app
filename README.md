@@ -1,61 +1,65 @@
-# Kaygan
+<div align="center">
+  <img src="docs/images/kaygan-icon.png" alt="Kaygan app icon" width="128" height="128">
+  <h1>Kaygan</h1>
+  <p><strong>A smoother, more natural mouse experience.</strong></p>
+  <p>macOS 15+ &nbsp;·&nbsp; <a href="LICENSE">Free and open source</a></p>
+  <p><a href="#getting-started">Getting started</a> &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a></p>
+</div>
 
-Kaygan is a macOS app that scrolls when you hold a mouse button and move the mouse. In toggle mode, click once to start scrolling and click again to stop.
+Hold a mouse button and move to scroll. Use the side buttons to go back and forward.
 
-Kaygan can also use your mouse’s side buttons to move back and forward through history.
+<p align="center">
+  <img src="docs/images/02-scrolling.jpeg" alt="Kaygan Scrolling settings with mouse button detection, speed, reverse direction and click-to-toggle controls" width="800">
+</p>
 
-## Requirements
+## What you can do
 
-Kaygan runs on macOS 15 or later. To build it, you need Xcode 16 or later and XcodeGen. XcodeGen creates the `Kaygan.xcodeproj` project from `project.yml`.
+- **Scroll in any direction.** Hold your chosen button or click to toggle, then move your mouse.
+- **Go back and forward.** Use your side buttons in apps that support navigation gestures.
+- **Set your pace.** Adjust scrolling speed and direction.
+- **Choose your apps.** Disable scrolling, navigation or both per app.
 
-## Build
+Changes in Settings apply immediately.
 
-Install XcodeGen with Homebrew:
+<p align="center">
+  <a href="docs/images/03-navigation.jpeg"><img src="docs/images/03-navigation.jpeg" alt="Navigation settings with side-button navigation, reverse directions and a button test" width="390"></a>
+  <a href="docs/images/01-general.jpeg"><img src="docs/images/01-general.jpeg" alt="General settings with Accessibility access, Launch at Login and disabled apps" width="390"></a>
+</p>
+
+## Getting started
+
+Requires **macOS 15+** and a mouse with a middle or side button. [Build and run Kaygan](#build-from-source), then:
+
+1. **Open Settings** from the menu bar icon.
+2. **Grant Accessibility access:** click **General → Request Access**, then enable Kaygan in **System Settings → Privacy & Security → Accessibility**. **Enabled** confirms access to handle mouse gestures and send scroll and navigation events.
+3. **Choose your button:** in **Scrolling**, click **Mouse button** and press your preferred middle or side button. The default is **Button 3** (usually the middle button). Hold it and move to scroll.
+
+Check side buttons in **Navigation → Test buttons**. **Buttons 4 and 5** go back and forward; a button assigned to scrolling takes priority.
+
+## Build from source
+
+Use **Xcode 27** and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The app targets macOS 15 and later; the Xcode project is generated from [`project.yml`](project.yml).
 
 ```sh
 brew install xcodegen
-```
-
-Generate the project and build the app:
-
-```sh
 xcodegen generate
-xcodebuild -project Kaygan.xcodeproj -scheme Kaygan build
+open Kaygan.xcodeproj
 ```
 
-To open the project in Xcode, run `open Kaygan.xcodeproj` after you generate it.
+In Xcode, select the **Kaygan** scheme and **My Mac**, then run the app. Kaygan starts in the menu bar without opening a window.
 
-`project.yml` sets the signing team in `DEVELOPMENT_TEAM`. If your team is different, change that value and run `xcodegen generate` again.
+For a signed build, use your existing signing identity. If your development team differs from the one in `project.yml`, update `DEVELOPMENT_TEAM` there and regenerate the project.
 
-## Run
-
-1. In Xcode, select the `Kaygan` scheme and `My Mac`. Run the app.
-2. Grant Accessibility access when macOS prompts, or open Settings > General and click **Request Access**. Allow Kaygan in `System Settings > Privacy & Security > Accessibility`; Kaygan shows **Enabled** when macOS confirms the access. Kaygan uses this permission to handle mouse-button gestures and send scroll and navigation events.
-3. After Kaygan starts scrolling, look in the Xcode debug console for `Kaygan: scrolling enabled`.
-
-If Kaygan cannot start or restore mouse input, it shows an alert to retry or quit.
-
-Kaygan runs from the menu bar and opens no window at launch. Click the Kaygan menu bar icon to open Settings or quit. While Settings is open, Kaygan appears in the Dock and the Command-Tab app switcher, including when the window is minimized or hidden. Closing Settings removes Kaygan from both while the app keeps running in the menu bar. You can optionally enable Launch at login in Settings > General.
-
-## Settings
-
-Kaygan keeps its settings in `com.aerz.Kaygan`. You can also set them with the macOS `defaults` command. This example sets mouse button 3:
+<details>
+<summary>Command-line builds and tests</summary>
 
 ```sh
-defaults write com.aerz.Kaygan button -int 3
-defaults write com.aerz.Kaygan speed -int 3
-defaults write com.aerz.Kaygan reverse -int 0
-defaults write com.aerz.Kaygan toggle -int 0
+xcodebuild -project Kaygan.xcodeproj -scheme Kaygan build
+xcodebuild -project Kaygan.xcodeproj -scheme Kaygan test
 ```
 
-Changes in the Settings window apply immediately. Changes with `defaults write` apply at the next launch.
-
-In Settings > General, add apps where Kaygan should leave Scrolling, Navigation, or both off. Rules use the app receiving the mouse event; Navigation also checks the frontmost app. New entries disable both features by default, and you can edit or remove each entry at any time. Detect remains available for configuring the scrolling button.
-
-Button numbers start at 1. Values 3 to 32 select extra buttons. The value 0 disables the app. If the default button does not work, use `Detect` in Settings. The next extra mouse button that you press becomes the new button.
-
-Speed has five steps. `1` is the slowest, `5` is the fastest, and `3` is the default. Set `reverse` to `1` to scroll in the opposite direction. Set `toggle` to `1` to turn on toggle mode.
+</details>
 
 ## License
 
-Kaygan is licensed under the GNU General Public License, version 3 or later. The full license text is in [LICENSE](LICENSE). You can use, study, change, and share the code under the terms of that license.
+Kaygan is free and open source under the [GNU General Public License, version 3 or later](LICENSE). You can use, study, change and share it under the terms of that license.
