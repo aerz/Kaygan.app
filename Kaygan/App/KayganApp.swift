@@ -34,6 +34,10 @@ private struct KayganMenuBarContent: View {
 
     var body: some View {
         Button("Settings…") {
+            if NSApp.activationPolicy() != .regular,
+               !NSApp.setActivationPolicy(.regular) {
+                KayganLogger.app.error("Could not change activation policy to regular when opening Settings")
+            }
             NSApp.activate()
             openSettings()
         }

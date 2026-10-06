@@ -211,19 +211,44 @@ private final class SettingsInputMonitorView: NSView {
     }
 }
 
+@MainActor
 private struct SettingsWindowChrome: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
+    func makeNSView(context: Context) -> SettingsWindowChromeView {
         SettingsWindowChromeView()
     }
 
-    func updateNSView(_: NSView, context: Context) {}
+    func updateNSView(_: SettingsWindowChromeView, context: Context) {}
+
+    static func dismantleNSView(_ view: SettingsWindowChromeView, coordinator: ()) {
+        view.removeWindowCloseObserver()
+    }
 }
 
 @MainActor
 private final class SettingsWindowChromeView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        removeWindowCloseObserver()
         configureWindow()
+
+        guard let window else { return }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+    }
+
+    func removeWindowCloseObserver() {
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: nil)
+    }
+
+    @objc private func windowWillClose(_ notification: Notification) {
+        if NSApp.activationPolicy() != .accessory,
+           !NSApp.setActivationPolicy(.accessory) {
+            KayganLogger.app.error("Could not change activation policy to accessory when closing Settings")
+        }
     }
 
     func configureWindow() {

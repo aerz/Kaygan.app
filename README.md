@@ -35,7 +35,7 @@ To open the project in Xcode, run `open Kaygan.xcodeproj` after you generate it.
 
 If Kaygan cannot start or restore mouse input, it shows an alert to retry or quit.
 
-Kaygan runs from the menu bar and opens no window at launch. Click the Kaygan menu bar icon to open Settings or quit. Kaygan has no Dock icon, including while Settings is open. You can optionally enable Launch at login in Settings > General.
+Kaygan runs from the menu bar and opens no window at launch. Click the Kaygan menu bar icon to open Settings or quit. While Settings is open, Kaygan appears in the Dock and the Command-Tab app switcher, including when the window is minimized or hidden. Closing Settings removes Kaygan from both while the app keeps running in the menu bar. You can optionally enable Launch at login in Settings > General.
 
 ## Settings
 
