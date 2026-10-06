@@ -50,6 +50,8 @@ defaults write com.aerz.Kaygan toggle -int 0
 
 Changes in the Settings window apply immediately. Changes with `defaults write` apply at the next launch.
 
+In Settings > General, add apps where Kaygan should leave Scrolling, Navigation, or both off. Rules use the app receiving the mouse event; Navigation also checks the frontmost app. New entries disable both features by default, and you can edit or remove each entry at any time. Detect remains available for configuring the scrolling button.
+
 Button numbers start at 1. Values 3 to 32 select extra buttons. The value 0 disables the app. If the default button does not work, use `Detect` in Settings. The next extra mouse button that you press becomes the new button.
 
 Speed has five steps. `1` is the slowest, `5` is the fastest, and `3` is the default. Set `reverse` to `1` to scroll in the opposite direction. Set `toggle` to `1` to turn on toggle mode.

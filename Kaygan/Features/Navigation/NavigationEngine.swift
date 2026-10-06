@@ -1,4 +1,5 @@
 @preconcurrency import ApplicationServices
+import AppKit
 import CoreFoundation
 import Foundation
 import Observation
@@ -30,8 +31,14 @@ final class NavigationEngine {
         if hasPostEventAccess { statusMessage = nil }
     }
 
-    func navigate(button: Int) -> Bool {
+    func navigate(button: Int, targetBundleIdentifier: String) -> Bool {
         guard settings.navigationEnabled else { return false }
+        let frontmostBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if settings.navigationIsDisabled(in: targetBundleIdentifier)
+            || frontmostBundleIdentifier.map(settings.navigationIsDisabled(in:)) == true {
+            return false
+        }
+
         refreshPermission()
         guard hasPostEventAccess else {
             statusMessage = "Allow Kaygan to post events in System Settings > Privacy & Security > Accessibility."

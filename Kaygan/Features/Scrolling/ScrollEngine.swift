@@ -75,25 +75,32 @@ final class ScrollEngine {
     private let logger = KayganLogger.scrolling
     var onTapInterruption: ((ScrollTapInterruption) -> Void)?
     var onOtherMouseDown: (@MainActor (Int) -> Bool)?
-    var onNavigationButtonDown: (@MainActor (Int) -> Bool)?
+    var onNavigationButtonDown: (@MainActor (Int, String) -> Bool)?
 
     private let settings: AppSettings
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var latchTap: CFMachPort?
     private var latchSource: CFRunLoopSource?
-    private var buttonHeld = false
     private var buttonLatched = false
     private var isSuspended = false
     private var didDrag = false
     private var pendingButtonDown: CGEvent?
     private var anchor: CGPoint?
+    private var activeScrollButton: Int?
+    private var activeScrollTargetBundleIdentifier: String?
+    private var scrollGestureCancelled = false
+    private var latchSuspendedForExcludedApp = false
     private var navigationButtonUps = Set<Int>()
     private var consecutiveTimeoutCount = 0
     private static let maxConsecutiveTimeouts = 3
 
     private var isScrolling: Bool {
         buttonHeld || buttonLatched
+    }
+
+    private var buttonHeld: Bool {
+        activeScrollButton != nil
     }
 
     init(settings: AppSettings) {
@@ -132,7 +139,7 @@ final class ScrollEngine {
         }
 
         guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            tap: .cgAnnotatedSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: events,
@@ -171,22 +178,73 @@ final class ScrollEngine {
     }
 
     func settingsDidChange() {
-        resetState()
+        cancelActiveScrollGesture()
     }
 
     func setSuspended(_ suspended: Bool) {
         isSuspended = suspended
-        if suspended { resetState() }
+        if suspended { cancelActiveScrollGesture() }
     }
 
     private func resetState() {
-        buttonHeld = false
         buttonLatched = false
         stopLatchTap()
+        anchor = nil
+        latchSuspendedForExcludedApp = false
+        navigationButtonUps.removeAll()
+        clearActiveScrollGesture()
+    }
+
+    func appExclusionsDidChange() {
+        guard buttonHeld, activeScrollTargetIsExcludedOrUnknown() else { return }
+        cancelActiveScrollGesture()
+    }
+
+    private func cancelActiveScrollGesture() {
+        buttonLatched = false
+        latchSuspendedForExcludedApp = false
+        stopLatchTap()
+
+        guard buttonHeld else {
+            if let anchor { warpCursor(to: anchor, scrolling: false) }
+            anchor = nil
+            return
+        }
+
+        scrollGestureCancelled = true
+        if let anchor {
+            warpCursor(to: anchor, scrolling: false)
+            self.anchor = nil
+        }
+    }
+
+    private func activeScrollTargetIsExcludedOrUnknown() -> Bool {
+        guard hasScrollingExclusions else { return false }
+        guard let activeScrollTargetBundleIdentifier else { return true }
+        return settings.scrollingIsDisabled(in: activeScrollTargetBundleIdentifier)
+    }
+
+    private var hasScrollingExclusions: Bool {
+        settings.appExclusions.contains(where: { $0.scrollingDisabled })
+    }
+
+    private func clearActiveScrollGesture() {
         didDrag = false
         pendingButtonDown = nil
-        anchor = nil
-        navigationButtonUps.removeAll()
+        activeScrollButton = nil
+        activeScrollTargetBundleIdentifier = nil
+        scrollGestureCancelled = false
+    }
+
+    private func discardStaleGestureState(for button: Int, at location: CGPoint) {
+        navigationButtonUps.remove(button + 1)
+
+        guard activeScrollButton == button else { return }
+        clearActiveScrollGesture()
+        if !buttonLatched {
+            if anchor != nil { warpCursor(to: location, scrolling: false) }
+            anchor = nil
+        }
     }
 
     private func startLatchTap() -> Bool {
@@ -200,7 +258,7 @@ final class ScrollEngine {
             }
         }
         guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            tap: .cgAnnotatedSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: events,
@@ -257,11 +315,6 @@ final class ScrollEngine {
         }
     }
 
-    private func matchesButton(_ event: CGEvent) -> Bool {
-        // Settings use one-based button numbers; CGEvent uses zero-based numbers.
-        !isSuspended && event.getIntegerValueField(.mouseEventButtonNumber) == settings.button - 1
-    }
-
     private func handle(
         proxy: CGEventTapProxy,
         type: CGEventType,
@@ -292,17 +345,23 @@ final class ScrollEngine {
 
         if tapKind == .primary { consecutiveTimeoutCount = 0 }
 
+        var downTargetBundleIdentifier: String?
         if type == .otherMouseDown {
+            let eventButton = Int(event.getIntegerValueField(.mouseEventButtonNumber))
+            discardStaleGestureState(for: eventButton, at: event.location)
+
             // AppKit local monitors can miss clicks consumed by a control-tracking loop.
-            let button = Int(event.getIntegerValueField(.mouseEventButtonNumber)) + 1
+            let button = eventButton + 1
             if onOtherMouseDown?(button) == true {
                 return Unmanaged.passUnretained(event)
             }
 
+            downTargetBundleIdentifier = EventTargetResolver.bundleIdentifier(for: event)
             if settings.navigationEnabled,
                button != settings.button,
                (button == 4 || button == 5),
-               onNavigationButtonDown?(button) == true {
+               let downTargetBundleIdentifier,
+               onNavigationButtonDown?(button, downTargetBundleIdentifier) == true {
                 navigationButtonUps.insert(button)
                 return nil
             }
@@ -311,65 +370,40 @@ final class ScrollEngine {
         if type == .otherMouseUp {
             let button = Int(event.getIntegerValueField(.mouseEventButtonNumber)) + 1
             if navigationButtonUps.remove(button) != nil { return nil }
+
+            if buttonHeld,
+               let activeScrollButton,
+               button - 1 == activeScrollButton {
+                return finishScrollGesture(proxy: proxy, event: event)
+            }
         }
 
         switch type {
-        case .otherMouseDown where matchesButton(event):
+        case .otherMouseDown where isConfiguredScrollButton(event):
+            if hasScrollingExclusions {
+                guard let downTargetBundleIdentifier else {
+                    return Unmanaged.passUnretained(event)
+                }
+                if settings.scrollingIsDisabled(in: downTargetBundleIdentifier) {
+                    return Unmanaged.passUnretained(event)
+                }
+            }
+
             if !isScrolling {
                 anchor = event.location
                 warpCursor(to: event.location, scrolling: true)
             }
-            buttonHeld = true
             didDrag = false
+            scrollGestureCancelled = false
+            activeScrollButton = Int(event.getIntegerValueField(.mouseEventButtonNumber))
+            activeScrollTargetBundleIdentifier = downTargetBundleIdentifier
             // Wait for release to distinguish a click from a drag-to-scroll gesture.
             pendingButtonDown = event.copy()
             return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
-        case .otherMouseUp where matchesButton(event) && buttonHeld:
-            buttonHeld = false
-            if settings.toggle {
-                if didDrag {
-                    buttonLatched = false
-                    stopLatchTap()
-                } else {
-                    if buttonLatched {
-                        buttonLatched = false
-                        stopLatchTap()
-                    } else {
-                        buttonLatched = startLatchTap()
-                    }
-                }
-            }
-            let didScroll = didDrag
-            if !didScroll, let pendingButtonDown {
-                pendingButtonDown.tapPostEvent(proxy)
-            }
-            let shouldForwardUp = !didScroll || pendingButtonDown == nil
-            pendingButtonDown = nil
-            didDrag = false
-            if !isScrolling {
-                anchor = nil
-                warpCursor(to: event.location, scrolling: false)
-            }
-            return shouldForwardUp ? Unmanaged.passUnretained(event) : nil
-        case .mouseMoved where isScrolling, .otherMouseDragged where isScrolling:
-            let deltaX = Int32(clamping: event.getIntegerValueField(.mouseEventDeltaX))
-            let deltaY = Int32(clamping: event.getIntegerValueField(.mouseEventDeltaY))
-            if buttonHeld && (deltaX != 0 || deltaY != 0) { didDrag = true }
-
-            let vertical = Int32(clamping: -speed * Int64(deltaY))
-            let horizontal = Int32(clamping: -speed * Int64(deltaX))
-            guard let wheel = CGEvent(
-                scrollWheelEvent2Source: nil,
-                units: .pixel,
-                wheelCount: 2,
-                wheel1: vertical,
-                wheel2: horizontal,
-                wheel3: 0
-            ) else { return Unmanaged.passUnretained(event) }
-
-            wheel.tapPostEvent(proxy)
-            if let anchor { _ = CGWarpMouseCursorPosition(anchor) }
-            return nil
+        case .otherMouseDragged where buttonHeld:
+            return handleScrollMovement(event: event, latched: false)
+        case .mouseMoved where buttonLatched:
+            return handleScrollMovement(event: event, latched: true)
         default:
             break
         }
@@ -377,8 +411,101 @@ final class ScrollEngine {
         return Unmanaged.passUnretained(event)
     }
 
+    private func isConfiguredScrollButton(_ event: CGEvent) -> Bool {
+        // Settings use one-based button numbers; CGEvent uses zero-based numbers.
+        !isSuspended && settings.button > 0
+            && event.getIntegerValueField(.mouseEventButtonNumber) == settings.button - 1
+    }
+
+    private func finishScrollGesture(proxy: CGEventTapProxy, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if !scrollGestureCancelled && settings.toggle {
+            if didDrag {
+                buttonLatched = false
+                stopLatchTap()
+            } else if buttonLatched {
+                buttonLatched = false
+                stopLatchTap()
+            } else {
+                buttonLatched = startLatchTap()
+            }
+        }
+
+        let gestureMoved = didDrag
+        if !gestureMoved, let pendingButtonDown {
+            pendingButtonDown.tapPostEvent(proxy)
+        }
+        let shouldForwardUp = !gestureMoved || pendingButtonDown == nil
+        clearActiveScrollGesture()
+
+        if !isScrolling {
+            anchor = nil
+            warpCursor(to: event.location, scrolling: false)
+        }
+        return shouldForwardUp ? Unmanaged.passUnretained(event) : nil
+    }
+
+    private func handleScrollMovement(
+        event: CGEvent,
+        latched: Bool
+    ) -> Unmanaged<CGEvent>? {
+        let deltaX = Int32(clamping: event.getIntegerValueField(.mouseEventDeltaX))
+        let deltaY = Int32(clamping: event.getIntegerValueField(.mouseEventDeltaY))
+        if buttonHeld && (deltaX != 0 || deltaY != 0) { didDrag = true }
+
+        if latched {
+            if hasScrollingExclusions {
+                guard let targetBundleIdentifier = EventTargetResolver.bundleIdentifier(for: event) else {
+                    anchor = nil
+                    latchSuspendedForExcludedApp = true
+                    return Unmanaged.passUnretained(event)
+                }
+                if settings.scrollingIsDisabled(in: targetBundleIdentifier) {
+                    anchor = nil
+                    latchSuspendedForExcludedApp = true
+                    return Unmanaged.passUnretained(event)
+                }
+            }
+            if latchSuspendedForExcludedApp {
+                anchor = event.location
+                latchSuspendedForExcludedApp = false
+                return Unmanaged.passUnretained(event)
+            }
+        } else {
+            guard !scrollGestureCancelled else {
+                return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+            }
+            if hasScrollingExclusions {
+                guard let activeScrollTargetBundleIdentifier else {
+                    cancelActiveScrollGesture()
+                    return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+                }
+                if settings.scrollingIsDisabled(in: activeScrollTargetBundleIdentifier) {
+                    cancelActiveScrollGesture()
+                    return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+                }
+            }
+        }
+
+        let vertical = Int32(clamping: -speed * Int64(deltaY))
+        let horizontal = Int32(clamping: -speed * Int64(deltaX))
+        guard let wheel = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .pixel,
+            wheelCount: 2,
+            wheel1: vertical,
+            wheel2: horizontal,
+            wheel3: 0
+        ) else { return Unmanaged.passUnretained(event) }
+
+        wheel.location = event.location
+        wheel.flags = event.flags
+        wheel.post(tap: .cgSessionEventTap)
+        if let anchor { _ = CGWarpMouseCursorPosition(anchor) }
+        return nil
+    }
+
     private func handleDisabledTap(reason: TapDisableReason, tapKind: ScrollTapKind) {
-        resetState()
+        cancelActiveScrollGesture()
 
         switch ScrollTapRecoveryPolicy.action(
             tapKind: tapKind,

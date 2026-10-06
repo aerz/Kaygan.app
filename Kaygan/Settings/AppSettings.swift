@@ -11,6 +11,7 @@ final class AppSettings {
         static let toggle = "toggle"
         static let navigationEnabled = "navigationEnabled"
         static let reverseNavigation = "reverseNavigation"
+        static let appExclusions = "appExclusions"
     }
 
     static let minSpeed: Int32 = 1
@@ -29,8 +30,12 @@ final class AppSettings {
     var toggle: Bool
     var navigationEnabled: Bool
     var reverseNavigation: Bool
+    private(set) var appExclusions: [AppExclusion]
+
+    private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         let savedButton = defaults.object(forKey: Key.button) as? Int
         if let savedButton, Self.isValidButton(savedButton) {
             button = savedButton
@@ -45,6 +50,12 @@ final class AppSettings {
         toggle = (defaults.object(forKey: Key.toggle) as? NSNumber)?.boolValue ?? Self.defaultToggle
         navigationEnabled = (defaults.object(forKey: Key.navigationEnabled) as? NSNumber)?.boolValue ?? Self.defaultNavigationEnabled
         reverseNavigation = (defaults.object(forKey: Key.reverseNavigation) as? NSNumber)?.boolValue ?? Self.defaultReverseNavigation
+        if let data = defaults.data(forKey: Key.appExclusions),
+           let savedExclusions = try? JSONDecoder().decode([AppExclusion].self, from: data) {
+            appExclusions = savedExclusions
+        } else {
+            appExclusions = []
+        }
     }
 
     func saveButton(to defaults: UserDefaults = .standard) {
@@ -71,6 +82,33 @@ final class AppSettings {
 
     func saveReverseNavigation(to defaults: UserDefaults = .standard) {
         defaults.set(reverseNavigation, forKey: Key.reverseNavigation)
+    }
+
+    func saveAppExclusion(_ exclusion: AppExclusion) {
+        if let index = appExclusions.firstIndex(where: { $0.bundleIdentifier == exclusion.bundleIdentifier }) {
+            appExclusions[index] = exclusion
+        } else {
+            appExclusions.append(exclusion)
+        }
+        persistAppExclusions()
+    }
+
+    func removeAppExclusion(bundleIdentifier: String) {
+        appExclusions.removeAll { $0.bundleIdentifier == bundleIdentifier }
+        persistAppExclusions()
+    }
+
+    func scrollingIsDisabled(in bundleIdentifier: String) -> Bool {
+        appExclusions.first { $0.bundleIdentifier == bundleIdentifier }?.scrollingDisabled == true
+    }
+
+    func navigationIsDisabled(in bundleIdentifier: String) -> Bool {
+        appExclusions.first { $0.bundleIdentifier == bundleIdentifier }?.navigationDisabled == true
+    }
+
+    private func persistAppExclusions() {
+        guard let data = try? JSONEncoder().encode(appExclusions) else { return }
+        defaults.set(data, forKey: Key.appExclusions)
     }
 
     static func isValidButton(_ button: Int) -> Bool {

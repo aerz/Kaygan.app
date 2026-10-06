@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 private enum SettingsPane: String {
     // Keep "general" assigned to Scrolling because earlier versions stored that value.
@@ -43,7 +44,7 @@ struct SettingsView: View {
             Group {
                 switch selectedPane {
                 case .general:
-                    GeneralSettingsView(model: generalSettings)
+                    GeneralSettingsView(model: generalSettings, settings: settings)
                 case .scrolling:
                     ScrollingSettingsView(settings: settings, recorder: recorder)
                 case .navigation:
@@ -461,22 +462,47 @@ private struct SettingsToggleRow: View {
 
 private struct GeneralSettingsView: View {
     @Bindable var model: GeneralSettingsModel
+    let settings: AppSettings
+
+    @State private var appToEdit: AppExclusion?
+    @State private var appSelectionError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            PaneHeader(
-                systemImage: nil,
-                title: "General",
-                detail: "Manage Accessibility access and decide whether Kaygan opens when you sign in."
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                PaneHeader(
+                    systemImage: nil,
+                    title: "General",
+                    detail: "Manage Accessibility access and decide whether Kaygan opens when you sign in."
+                )
+
+                SettingsGroup {
+                    accessibility
+                }
+
+                SettingsGroup {
+                    launchAtLoginSection
+                }
+
+                SettingsGroup {
+                    appExclusionsSection
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollIndicators(.hidden)
+        .sheet(item: $appToEdit) { exclusion in
+            AppExclusionEditor(
+                exclusion: exclusion,
+                settings: settings
             )
-
-            SettingsGroup {
-                accessibility
-            }
-
-            SettingsGroup {
-                launchAtLoginSection
-            }
+                .frame(width: 360)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .alert("Could Not Add App", item: $appSelectionError) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
         }
         .onAppear {
             model.refreshAccessibility()
@@ -507,7 +533,7 @@ private struct GeneralSettingsView: View {
                         .accessibilityLabel("Accessibility")
                         .accessibilityValue("Enabled")
                 } else {
-                    actionButton("Request Access") {
+                    GeneralActionButton(title: "Request Access") {
                         model.requestAccessibility()
                     }
                     .accessibilityHint("Ask macOS to let Kaygan use Accessibility features.")
@@ -534,7 +560,7 @@ private struct GeneralSettingsView: View {
                 }
 
                 if let actionTitle = model.launchAtLoginActionTitle {
-                    actionButton(actionTitle) {
+                    GeneralActionButton(title: actionTitle) {
                         model.performLaunchAtLoginAction()
                     }
                 }
@@ -549,8 +575,90 @@ private struct GeneralSettingsView: View {
         }
     }
 
-    private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private var appExclusionsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Disabled apps")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.textPrimary)
+
+                Spacer()
+
+                Button(action: chooseApplication) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Add an app")
+                .accessibilityLabel("Add an app")
+            }
+
+            Divider()
+                .overlay(Palette.hover)
+
+            if settings.appExclusions.isEmpty {
+                Text("No apps added.")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textSecondary)
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(settings.appExclusions) { exclusion in
+                        AppExclusionRow(
+                            exclusion: exclusion,
+                            onEdit: { appToEdit = exclusion },
+                            onRemove: { settings.removeAppExclusion(bundleIdentifier: exclusion.bundleIdentifier) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func chooseApplication() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.resolvesAliases = true
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.prompt = "Add App"
+        panel.message = "Choose an app to disable Kaygan features in."
+
+        let completionHandler: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .OK, let url = panel.url else { return }
+            guard let selected = AppExclusion.selectedApplication(at: url) else {
+                appSelectionError = "Kaygan needs an app with a bundle identifier to recognize it."
+                return
+            }
+
+            guard !settings.appExclusions.contains(where: { $0.bundleIdentifier == selected.bundleIdentifier }) else {
+                return
+            }
+            settings.saveAppExclusion(selected)
+        }
+
+        if let window = NSApp.keyWindow {
+            panel.beginSheetModal(for: window, completionHandler: completionHandler)
+        } else {
+            panel.begin(completionHandler: completionHandler)
+        }
+    }
+
+}
+
+private struct GeneralActionButton: View {
+    let title: String
+    var role: ButtonRole? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: role, action: action) {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Palette.textPrimary)
@@ -559,6 +667,128 @@ private struct GeneralSettingsView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(GeneralActionButtonStyle())
+    }
+}
+
+private struct AppExclusionRow: View {
+    let exclusion: AppExclusion
+    let onEdit: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: exclusion.applicationPath))
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+
+            Text(exclusion.displayName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Palette.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 8)
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Edit \(exclusion.displayName)")
+            .accessibilityLabel("Edit \(exclusion.displayName)")
+
+            Button(role: .destructive, action: onRemove) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remove \(exclusion.displayName)")
+            .accessibilityLabel("Remove \(exclusion.displayName)")
+        }
+    }
+}
+
+private struct AppExclusionEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var exclusion: AppExclusion
+
+    private let settings: AppSettings
+
+    init(exclusion: AppExclusion, settings: AppSettings) {
+        self.settings = settings
+        _exclusion = State(initialValue: exclusion)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: exclusion.applicationPath))
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(exclusion.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("Choose which Kaygan features to disable.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            }
+
+            VStack(spacing: 14) {
+                exclusionToggle("Disable scrolling", isOn: $exclusion.scrollingDisabled)
+                exclusionToggle("Disable navigation", isOn: $exclusion.navigationDisabled)
+            }
+
+            HStack(spacing: 10) {
+                Spacer()
+                GeneralActionButton(title: "Cancel", role: .cancel) {
+                    dismiss()
+                }
+                GeneralActionButton(title: "Save") {
+                    settings.saveAppExclusion(exclusion)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(22)
+        .background(Palette.canvas)
+    }
+
+    private func exclusionToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            HStack {
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.textPrimary)
+                Spacer()
+                Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(isOn.wrappedValue ? Palette.success : Palette.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(isOn.wrappedValue ? "On" : "Off"))
+        .accessibilityHint(Text("Toggle this app exclusion."))
     }
 }
 

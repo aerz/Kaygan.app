@@ -49,8 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.onOtherMouseDown = { [weak self] button in
             self?.buttonRecorder.recordIfCapturing(button: button) ?? false
         }
-        engine.onNavigationButtonDown = { [weak self] button in
-            self?.navigationEngine.navigate(button: button) ?? false
+        engine.onNavigationButtonDown = { [weak self] button, targetBundleIdentifier in
+            self?.navigationEngine.navigate(button: button, targetBundleIdentifier: targetBundleIdentifier) ?? false
         }
         buttonRecorder.onCaptureStateChange = { [weak self] isCapturing in
             self?.engine.setSuspended(isCapturing)
@@ -59,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.engine.isEventTapActive == true
         }
         observeSettings()
+        observeAppExclusions()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -140,6 +141,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor [weak self] in
                 self?.observeSettings()
                 self?.settingsDidChange()
+            }
+        }
+    }
+
+    private func observeAppExclusions() {
+        withObservationTracking {
+            _ = settings.appExclusions
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.observeAppExclusions()
+                self?.engine.appExclusionsDidChange()
             }
         }
     }
