@@ -217,49 +217,104 @@ private struct SettingsWindowChrome: NSViewRepresentable {
         SettingsWindowChromeView()
     }
 
-    func updateNSView(_: SettingsWindowChromeView, context: Context) {}
+    func updateNSView(_ view: SettingsWindowChromeView, context: Context) {
+        view.scheduleWindowConfiguration()
+    }
 
     static func dismantleNSView(_ view: SettingsWindowChromeView, coordinator: ()) {
-        view.removeWindowCloseObserver()
+        view.removeWindowObservers()
     }
 }
 
 @MainActor
 private final class SettingsWindowChromeView: NSView {
+    private weak var observedWindow: NSWindow?
+    private var pendingConfiguration: DispatchWorkItem?
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        removeWindowCloseObserver()
-        configureWindow()
+        removeWindowObservers()
 
         guard let window else { return }
+        observedWindow = window
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: window
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowWillClose(_:)),
             name: NSWindow.willCloseNotification,
             object: window
         )
+        scheduleWindowConfiguration()
     }
 
-    func removeWindowCloseObserver() {
-        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: nil)
+    func scheduleWindowConfiguration() {
+        guard let window, observedWindow === window, pendingConfiguration == nil else { return }
+
+        // Apply after SwiftUI's current window update, coalescing requests from the same pass.
+        let workItem = DispatchWorkItem { [weak self, weak window] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.pendingConfiguration = nil
+                guard let window, self.window === window, self.observedWindow === window else { return }
+                self.configureWindow(window)
+            }
+        }
+        pendingConfiguration = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
+    func removeWindowObservers() {
+        cancelWindowConfiguration()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: observedWindow)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: observedWindow)
+        observedWindow = nil
+    }
+
+    private func cancelWindowConfiguration() {
+        pendingConfiguration?.cancel()
+        pendingConfiguration = nil
+    }
+
+    @objc private func windowDidBecomeKey(_ notification: Notification) {
+        scheduleWindowConfiguration()
     }
 
     @objc private func windowWillClose(_ notification: Notification) {
+        cancelWindowConfiguration()
         if NSApp.activationPolicy() != .accessory,
            !NSApp.setActivationPolicy(.accessory) {
             KayganLogger.app.error("Could not change activation policy to accessory when closing Settings")
         }
     }
 
-    func configureWindow() {
-        guard let window else { return }
+    private func configureWindow(_ window: NSWindow) {
+        let requiredStyle: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        let style = window.styleMask.union(requiredStyle)
+        if window.styleMask != style {
+            window.styleMask = style
+        }
 
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-        window.backgroundColor = NSColor(calibratedWhite: Palette.canvasLevel, alpha: 1)
-        window.title = ""
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
+        let backgroundColor = NSColor(calibratedWhite: Palette.canvasLevel, alpha: 1)
+        if window.backgroundColor != backgroundColor {
+            window.backgroundColor = backgroundColor
+        }
+        if !window.title.isEmpty {
+            window.title = ""
+        }
+        if window.titleVisibility != .hidden {
+            window.titleVisibility = .hidden
+        }
+        if !window.titlebarAppearsTransparent {
+            window.titlebarAppearsTransparent = true
+        }
+        if window.titlebarSeparatorStyle != .none {
+            window.titlebarSeparatorStyle = .none
+        }
     }
 }
 
