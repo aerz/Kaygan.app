@@ -564,29 +564,30 @@ private struct SettingsToggleRow: View {
     var disabled = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
-            HStack(spacing: SettingsSpacing.row) {
+        HStack(spacing: SettingsSpacing.inset) {
+            VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityHidden(true)
 
-                Spacer(minLength: SettingsSpacing.inline)
-
-                Toggle(title, isOn: $isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(Palette.switchOn)
-                    .accessibilityLabel(title)
-                    .accessibilityHint(caption ?? "")
-                    .disabled(disabled)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let caption {
-                Text(caption)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textSecondary)
-            }
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .fixedSize()
+                .tint(Palette.switchOn)
+                .accessibilityLabel(title)
+                .accessibilityHint(caption ?? "")
+                .disabled(disabled)
         }
     }
 }
