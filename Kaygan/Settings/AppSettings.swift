@@ -9,6 +9,7 @@ final class AppSettings {
         static let speed = "speed"
         static let reverse = "reverse"
         static let toggle = "toggle"
+        static let disableButtonClickActions = "disableButtonClickActions"
         static let navigationEnabled = "navigationEnabled"
         static let reverseNavigation = "reverseNavigation"
         static let appExclusions = "appExclusions"
@@ -20,6 +21,7 @@ final class AppSettings {
     static let defaultSpeed: Int32 = 3
     static let defaultReverse = false
     static let defaultToggle = false
+    static let defaultDisableButtonClickActions = false
     static let defaultNavigationEnabled = true
     static let defaultReverseNavigation = false
 
@@ -28,6 +30,7 @@ final class AppSettings {
     var speed: Int32
     var reverse: Bool
     var toggle: Bool
+    var disableButtonClickActions: Bool
     var navigationEnabled: Bool
     var reverseNavigation: Bool
     private(set) var appExclusions: [AppExclusion]
@@ -48,6 +51,7 @@ final class AppSettings {
         speed = min(max(savedSpeed, Self.minSpeed), Self.maxSpeed)
         reverse = (defaults.object(forKey: Key.reverse) as? NSNumber)?.boolValue ?? Self.defaultReverse
         toggle = (defaults.object(forKey: Key.toggle) as? NSNumber)?.boolValue ?? Self.defaultToggle
+        disableButtonClickActions = (defaults.object(forKey: Key.disableButtonClickActions) as? NSNumber)?.boolValue ?? Self.defaultDisableButtonClickActions
         navigationEnabled = (defaults.object(forKey: Key.navigationEnabled) as? NSNumber)?.boolValue ?? Self.defaultNavigationEnabled
         reverseNavigation = (defaults.object(forKey: Key.reverseNavigation) as? NSNumber)?.boolValue ?? Self.defaultReverseNavigation
         if let data = defaults.data(forKey: Key.appExclusions),
@@ -74,6 +78,10 @@ final class AppSettings {
 
     func saveToggle(to defaults: UserDefaults = .standard) {
         defaults.set(toggle, forKey: Key.toggle)
+    }
+
+    func saveDisableButtonClickActions() {
+        defaults.set(disableButtonClickActions, forKey: Key.disableButtonClickActions)
     }
 
     func saveNavigationEnabled(to defaults: UserDefaults = .standard) {

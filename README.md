@@ -36,6 +36,8 @@ Requires **macOS 15+** and a mouse with a middle or side button. [Build and run 
 
 Check side buttons in **Navigation → Test buttons**. **Buttons 4 and 5** go back and forward; a button assigned to scrolling takes priority.
 
+By default, clicking the scrolling button without moving the mouse keeps its normal action in the app, such as opening a link or closing a tab. Moving while holding it scrolls without triggering a click. Enable **Scrolling → Disable normal button actions** to reserve the button for scrolling, including when **Click to toggle scrolling** is enabled.
+
 ## Build from source
 
 Use **Xcode 27** and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The app targets macOS 15 and later; the Xcode project is generated from [`project.yml`](project.yml).

@@ -135,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = settings.speed
             _ = settings.reverse
             _ = settings.toggle
+            _ = settings.disableButtonClickActions
             _ = settings.navigationEnabled
             _ = settings.reverseNavigation
         } onChange: { [weak self] in

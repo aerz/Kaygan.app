@@ -492,6 +492,12 @@ private struct ScrollingSettingsView: View {
                 isOn: toggle,
                 caption: "Click the configured button once to start, and again to stop."
             )
+
+            SettingsToggleRow(
+                title: "Disable normal button actions",
+                isOn: disableButtonClickActions,
+                caption: "Use the button only for scrolling."
+            )
         }
     }
 
@@ -525,6 +531,16 @@ private struct ScrollingSettingsView: View {
             set: { value in
                 settings.toggle = value
                 settings.saveToggle()
+            }
+        )
+    }
+
+    private var disableButtonClickActions: Binding<Bool> {
+        Binding(
+            get: { settings.disableButtonClickActions },
+            set: { value in
+                settings.disableButtonClickActions = value
+                settings.saveDisableButtonClickActions()
             }
         )
     }

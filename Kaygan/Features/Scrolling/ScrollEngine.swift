@@ -86,6 +86,7 @@ final class ScrollEngine {
     private var isSuspended = false
     private var didDrag = false
     private var pendingButtonDown: CGEvent?
+    private var buttonDownWasForwarded = false
     private var anchor: CGPoint?
     private var activeScrollButton: Int?
     private var activeScrollTargetBundleIdentifier: String?
@@ -231,6 +232,7 @@ final class ScrollEngine {
     private func clearActiveScrollGesture() {
         didDrag = false
         pendingButtonDown = nil
+        buttonDownWasForwarded = false
         activeScrollButton = nil
         activeScrollTargetBundleIdentifier = nil
         scrollGestureCancelled = false
@@ -398,8 +400,10 @@ final class ScrollEngine {
             activeScrollButton = Int(event.getIntegerValueField(.mouseEventButtonNumber))
             activeScrollTargetBundleIdentifier = downTargetBundleIdentifier
             // Wait for release to distinguish a click from a drag-to-scroll gesture.
-            pendingButtonDown = event.copy()
-            return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+            let allowsClickPassthrough = !settings.disableButtonClickActions
+            pendingButtonDown = allowsClickPassthrough ? event.copy() : nil
+            buttonDownWasForwarded = allowsClickPassthrough && pendingButtonDown == nil
+            return buttonDownWasForwarded ? Unmanaged.passUnretained(event) : nil
         case .otherMouseDragged where buttonHeld:
             return handleScrollMovement(event: event, latched: false)
         case .mouseMoved where buttonLatched:
@@ -434,7 +438,7 @@ final class ScrollEngine {
         if !gestureMoved, let pendingButtonDown {
             pendingButtonDown.tapPostEvent(proxy)
         }
-        let shouldForwardUp = !gestureMoved || pendingButtonDown == nil
+        let shouldForwardUp = buttonDownWasForwarded || (!gestureMoved && pendingButtonDown != nil)
         clearActiveScrollGesture()
 
         if !isScrolling {
@@ -472,16 +476,16 @@ final class ScrollEngine {
             }
         } else {
             guard !scrollGestureCancelled else {
-                return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+                return buttonDownWasForwarded ? Unmanaged.passUnretained(event) : nil
             }
             if hasScrollingExclusions {
                 guard let activeScrollTargetBundleIdentifier else {
                     cancelActiveScrollGesture()
-                    return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+                    return buttonDownWasForwarded ? Unmanaged.passUnretained(event) : nil
                 }
                 if settings.scrollingIsDisabled(in: activeScrollTargetBundleIdentifier) {
                     cancelActiveScrollGesture()
-                    return pendingButtonDown == nil ? Unmanaged.passUnretained(event) : nil
+                    return buttonDownWasForwarded ? Unmanaged.passUnretained(event) : nil
                 }
             }
         }
