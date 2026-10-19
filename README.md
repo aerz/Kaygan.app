@@ -28,11 +28,23 @@ Changes in Settings apply immediately.
 
 ## Getting started
 
-Requires **macOS 15+** and a mouse with a middle or side button. [Build and run Kaygan](#build-from-source), then:
+Requires macOS 15 or later and a mouse with a middle or side button. Download a DMG from [GitHub Releases](https://github.com/aerz/Kaygan.app/releases) when available, or [build from source](#build-from-source).
 
-1. **Open Settings** from the menu bar icon.
-2. **Grant Accessibility access:** click **General → Request Access**, then enable Kaygan in **System Settings → Privacy & Security → Accessibility**. **Enabled** confirms access to handle mouse gestures and send scroll and navigation events.
-3. **Choose your button:** in **Scrolling**, click **Mouse button** and press your preferred middle or side button. The default is **Button 3** (usually the middle button). Hold it and move to scroll.
+1. Open the DMG and drag Kaygan into Applications.
+2. Open Kaygan from Applications. If macOS blocks it, open System Settings → Privacy & Security and select Open Anyway.
+3. Open Settings from the menu bar icon.
+4. Click General → Request Access. Enable Kaygan in System Settings → Privacy & Security → Accessibility. Enabled confirms access to handle mouse gestures and send scroll and navigation events.
+5. In Scrolling, click Mouse button and press your preferred middle or side button. The default is Button 3, usually the middle button. Hold it and move to scroll.
+
+If you built Kaygan from source, start at step 3. Release downloads use a self-signed certificate and are not notarized by Apple.
+
+For a downloaded copy that you trust, you can remove its quarantine attribute after copying it to Applications:
+
+```sh
+xattr -rd com.apple.quarantine "/Applications/Kaygan.app"
+```
+
+This command does not grant Accessibility access. Complete the permission step in System Settings.
 
 Check side buttons in **Navigation → Test buttons**. **Buttons 4 and 5** go back and forward; a button assigned to scrolling takes priority.
 
@@ -61,6 +73,34 @@ xcodebuild -project Kaygan.xcodeproj -scheme Kaygan test
 ```
 
 </details>
+
+## Package a release
+
+The [Package Kaygan workflow](.github/workflows/package.yml) runs the tests, builds and signs the app, and creates the DMG using [package.sh](.github/scripts/package.sh). It uploads the DMG and `SHA256SUMS` in an artifact named after the source commit.
+
+If you do not have a release certificate, create one in Keychain Access → Certificate Assistant → Create a Certificate. Name it `Kaygan Release Signing`. Select Self Signed Root and Code Signing, and use the login keychain. Enable the override for defaults to set the validity period to 3650 days.
+
+In My Certificates, export the certificate and its private key as a password-protected `.p12` file. Keep the file and password outside the repository. Reuse this certificate for each release so that macOS can recognize the app between versions.
+
+If you already have a release certificate, reuse its `.p12` file.
+
+Add two repository secrets under Settings → Secrets and variables → Actions. Set `SIGNING_CERTIFICATE_P12` to the Base64-encoded `.p12` file. Set `SIGNING_CERTIFICATE_PASSWORD` to the password for that file.
+
+To copy the encoded certificate to the clipboard, run:
+
+```sh
+base64 -i "/path/to/Kaygan Release Signing.p12" | pbcopy
+```
+
+Run Actions → Package Kaygan → Run workflow. The workflow uses Xcode 27 and removes the temporary signing keychain when it finishes. After reviewing the artifact, upload the DMG and `SHA256SUMS` to a GitHub release manually.
+
+Download and extract the artifact. From the directory that contains both files, run:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+Before publishing, install the app and grant Accessibility access. Close it, replace it with the next build, and make sure that scrolling and navigation work without granting access again. Changing the signing certificate or bundle identifier requires a new permission grant.
 
 ## License
 

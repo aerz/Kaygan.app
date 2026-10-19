@@ -1,0 +1,81 @@
+name: Package Kaygan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run tests
+        run: |
+          xcodegen generate
+          xcodebuild -quiet -project Kaygan.xcodeproj -scheme Kaygan \
+            -configuration Debug -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/tests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= test
+
+      - name: Import signing certificate
+        env:
+          SIGNING_CERTIFICATE_P12: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${SIGNING_CERTIFICATE_P12:?Set the SIGNING_CERTIFICATE_P12 repository secret.}"
+          : "${SIGNING_CERTIFICATE_PASSWORD:?Set the SIGNING_CERTIFICATE_PASSWORD repository secret.}"
+          umask 077
+          certificate_path="$RUNNER_TEMP/kaygan-signing.p12"
+          keychain_path="$RUNNER_TEMP/kaygan-signing.keychain-db"
+          printf '%s' "$SIGNING_CERTIFICATE_P12" | base64 --decode > "$certificate_path"
+          keychain_password="$(openssl rand -base64 32)"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 3600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" -P "$SIGNING_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" "$keychain_path" > /dev/null
+          fingerprint="$(security find-certificate -a -p "$keychain_path" \
+            | openssl x509 -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
+          [[ "$fingerprint" =~ ^[[:xdigit:]]{40}$ ]]
+          printf 'SIGNING_IDENTITY=%s\nSIGNING_KEYCHAIN=%s\n' "$fingerprint" "$keychain_path" >> "$GITHUB_ENV"
+          rm -f "$certificate_path"
+
+      - name: Build disk image
+        run: ./.github/scripts/package.sh
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          keychain_path="$RUNNER_TEMP/kaygan-signing.keychain-db"
+          cleanup_status=0
+          if [[ -f "$keychain_path" ]]; then
+            security delete-keychain "$keychain_path" || cleanup_status=$?
+          fi
+          rm -f "$RUNNER_TEMP/kaygan-signing.p12"
+          exit "$cleanup_status"
+
+      - name: Upload disk image and checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Kaygan-arm64-${{ github.sha }}
+          path: |
+            build/dist/Kaygan-*-arm64.dmg
+            build/dist/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
