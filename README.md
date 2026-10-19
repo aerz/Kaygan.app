@@ -2,8 +2,7 @@
   <img src="docs/images/kaygan-icon.png" alt="Kaygan app icon" width="128" height="128">
   <h1>Kaygan</h1>
   <p><strong>A smoother, more natural mouse experience.</strong></p>
-  <p>macOS 15+</p>
-  <p><a href="https://github.com/aerz/Kaygan.app/releases/latest">Download for macOS</a> &nbsp;·&nbsp; <a href="#getting-started">Getting started</a> &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a></p>
+  <p><a href="https://github.com/aerz/Kaygan.app/releases/latest">Download</a> &nbsp;·&nbsp; <a href="#getting-started">Getting started</a> &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a></p>
 </div>
 
 Hold a mouse button and move to scroll. Use the side buttons to go back and forward.
