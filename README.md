@@ -2,8 +2,8 @@
   <img src="docs/images/kaygan-icon.png" alt="Kaygan app icon" width="128" height="128">
   <h1>Kaygan</h1>
   <p><strong>A smoother, more natural mouse experience.</strong></p>
-  <p>macOS 15+ &nbsp;·&nbsp; <a href="LICENSE">Free and open source</a></p>
-  <p><a href="#getting-started">Getting started</a> &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a></p>
+  <p>macOS 15+</p>
+  <p><a href="https://github.com/aerz/Kaygan.app/releases/latest">Download for macOS</a> &nbsp;·&nbsp; <a href="#getting-started">Getting started</a> &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a></p>
 </div>
 
 Hold a mouse button and move to scroll. Use the side buttons to go back and forward.
@@ -28,7 +28,7 @@ Changes in Settings apply immediately.
 
 ## Getting started
 
-Requires macOS 15 or later and a mouse with a middle or side button. Download a DMG from [GitHub Releases](https://github.com/aerz/Kaygan.app/releases) when available, or [build from source](#build-from-source).
+Requires macOS 15 or later and a mouse with a middle or side button. Download a DMG from [GitHub Releases](https://github.com/aerz/Kaygan.app/releases) or [build from source](#build-from-source).
 
 1. Open the DMG and drag Kaygan into Applications.
 2. Open Kaygan from Applications. If macOS blocks it, open System Settings → Privacy & Security and select Open Anyway.
