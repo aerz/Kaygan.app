@@ -92,7 +92,13 @@ To copy the encoded certificate to the clipboard, run:
 base64 -i "/path/to/Kaygan Release Signing.p12" | pbcopy
 ```
 
-Run Actions → Package Kaygan → Run workflow. The workflow uses Xcode 27 and removes the temporary signing keychain when it finishes. After reviewing the artifact, upload the DMG and `SHA256SUMS` to a GitHub release manually.
+The workflow runs when you push to the `release` branch. Commit your changes to `main`, then sync the remote `release` branch:
+
+```sh
+git push origin main:release
+```
+
+Follow the run in Actions → Package Kaygan. The workflow uses Xcode 27 and removes the temporary signing keychain when it finishes. After reviewing the artifact, upload the DMG and `SHA256SUMS` to a GitHub release manually.
 
 Download and extract the artifact. From the directory that contains both files, run:
 
