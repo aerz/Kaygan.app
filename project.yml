@@ -7,11 +7,17 @@ options:
   createIntermediateGroups: true
   xcodeVersion: "27.0"
 
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+
+fileGroups:
+  - Config
+
 settings:
   base:
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
     DEAD_CODE_STRIPPING: YES
-    DEVELOPMENT_TEAM: X8YMM69L75
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     STRING_CATALOG_GENERATE_SYMBOLS: YES
 
@@ -38,7 +44,6 @@ targets:
       - path: Kaygan
     settings:
       base:
-        CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: "1"
         DEAD_CODE_STRIPPING: YES
         GENERATE_INFOPLIST_FILE: NO

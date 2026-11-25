@@ -64,7 +64,7 @@ open Kaygan.xcodeproj
 
 In Xcode, select the **Kaygan** scheme and **My Mac**, then run the app. Kaygan starts in the menu bar without opening a window.
 
-For a signed build, use your existing signing identity. If your development team differs from the one in `project.yml`, update `DEVELOPMENT_TEAM` there and regenerate the project.
+Signing defaults live in [`Config/Signing.xcconfig`](Config/Signing.xcconfig). If your development team differs, update it and regenerate the project. For a stable local identity, copy [`Config/Signing.local.xcconfig.example`](Config/Signing.local.xcconfig.example) to `Config/Signing.local.xcconfig` and set `CODE_SIGN_IDENTITY`. That file is ignored by git, and it keeps Debug builds in `build/Debug` so macOS keeps the Accessibility grant across rebuilds.
 
 <details>
 <summary>Command-line builds and tests</summary>
@@ -108,7 +108,7 @@ Download and extract the artifact. From the directory that contains both files, 
 shasum -a 256 -c SHA256SUMS
 ```
 
-Before publishing, install the app and grant Accessibility access. Close it, replace it with the next build, and make sure that scrolling and navigation work without granting access again. Changing the signing certificate or bundle identifier requires a new permission grant.
+Before publishing, install the app and grant Accessibility access. Close it, replace it with the next build, and make sure that scrolling and navigation work without granting access again. Changing the signing certificate, bundle identifier, or build path requires a new permission grant.
 
 After reviewing the artifact, upload the DMG and `SHA256SUMS` to a GitHub release manually.
 
