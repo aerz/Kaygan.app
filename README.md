@@ -12,7 +12,7 @@
 ## What you can do
 
 - **Scroll in any direction.** Hold your chosen button or click to toggle, then move your mouse.
-- **Go back and forward.** Use your side buttons in apps that support navigation gestures.
+- **Go back and forward.** Use your side buttons with the app's own Back and Forward commands, or fall back to a swipe gesture.
 - **Set your pace.** Adjust scrolling speed and direction.
 - **Choose your apps.** Disable scrolling, navigation or both per app.
 
@@ -49,6 +49,8 @@ xattr -rd com.apple.quarantine "/Applications/Kaygan.app"
 This command does not grant Accessibility access. Complete the permission step in System Settings.
 
 Check side buttons in **Navigation → Test buttons**. **Buttons 4 and 5** go back and forward; a button assigned to scrolling takes priority.
+
+Kaygan uses the app's **Back** and **Forward** menu commands when it can find them. The lookup currently matches the English menu titles. This works in apps that don't handle trackpad swipe gestures, including many Electron apps. If the menu commands are unavailable, Kaygan simulates a swipe gesture.
 
 By default, clicking the scrolling button without moving the mouse keeps its normal action in the app, such as opening a link or closing a tab. Moving while holding it scrolls without triggering a click. Enable **Scrolling → Disable normal button actions** to reserve the button for scrolling, including when **Click to toggle scrolling** is enabled.
 

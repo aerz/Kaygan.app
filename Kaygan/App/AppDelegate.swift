@@ -6,6 +6,7 @@ enum KayganLogger {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.aerz.Kaygan"
 
     static let app = Logger(subsystem: subsystem, category: "app")
+    static let navigation = Logger(subsystem: subsystem, category: "navigation")
     static let scrolling = Logger(subsystem: subsystem, category: "scrolling")
 }
 

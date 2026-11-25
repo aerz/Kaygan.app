@@ -4,12 +4,47 @@ import CoreFoundation
 import Foundation
 import Observation
 
+enum NavigationDirection: Sendable, Equatable {
+    case back
+    case forward
+
+    private var titles: Set<String> {
+        switch self {
+        case .back: ["back", "go back"]
+        case .forward: ["forward", "go forward"]
+        }
+    }
+
+    var logName: String {
+        switch self {
+        case .back: "back"
+        case .forward: "forward"
+        }
+    }
+
+    func matches(title: String) -> Bool {
+        titles.contains(Self.normalized(title))
+    }
+
+    private static func normalized(_ title: String) -> String {
+        var normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedTitle.hasSuffix("...") {
+            normalizedTitle.removeLast(3)
+        }
+        if normalizedTitle.hasSuffix("…") {
+            normalizedTitle.removeLast()
+        }
+        return normalizedTitle.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
 @MainActor
 @Observable
 final class NavigationEngine {
     private let settings: AppSettings
 
     private var hasPostEventAccess = false
+    private var navigationTask: Task<Void, Never>?
     private(set) var statusMessage: String?
 
     init(settings: AppSettings) {
@@ -32,10 +67,13 @@ final class NavigationEngine {
     }
 
     func navigate(button: Int, targetBundleIdentifier: String) -> Bool {
-        guard settings.navigationEnabled else { return false }
-        let frontmostBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        if settings.navigationIsDisabled(in: targetBundleIdentifier)
-            || frontmostBundleIdentifier.map(settings.navigationIsDisabled(in:)) == true {
+        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        let frontmostBundleIdentifier = frontmostApplication?.bundleIdentifier
+
+        guard navigationIsAllowed(
+            targetBundleIdentifier: targetBundleIdentifier,
+            frontmostBundleIdentifier: frontmostBundleIdentifier
+        ) else {
             return false
         }
 
@@ -47,7 +85,58 @@ final class NavigationEngine {
 
         let isBackButton = button == 4
         let goesBack = isBackButton != settings.reverseNavigation
-        let direction: UInt32 = goesBack ? GestureSwipe.right : GestureSwipe.left
+        let navigationDirection: NavigationDirection = goesBack ? .back : .forward
+
+        guard let frontmostApplication else {
+            return postSwipeGesture(navigationDirection)
+        }
+
+        let processIdentifier = frontmostApplication.processIdentifier
+        let previousTask = navigationTask
+        navigationTask = Task { @MainActor [weak self] in
+            _ = await previousTask?.value
+            guard let self else { return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier,
+                  navigationIsAllowed(
+                      targetBundleIdentifier: targetBundleIdentifier,
+                      frontmostBundleIdentifier: frontmostBundleIdentifier
+                  ) else {
+                return
+            }
+
+            let pressed = await Task.detached(priority: .userInitiated) {
+                AppMenuNavigator.pressMenuItem(navigationDirection, in: processIdentifier)
+            }.value
+
+            if pressed {
+                statusMessage = nil
+                return
+            }
+
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier,
+                  navigationIsAllowed(
+                      targetBundleIdentifier: targetBundleIdentifier,
+                      frontmostBundleIdentifier: frontmostBundleIdentifier
+                  ) else {
+                return
+            }
+            postSwipeGesture(navigationDirection)
+        }
+        return true
+    }
+
+    private func navigationIsAllowed(
+        targetBundleIdentifier: String,
+        frontmostBundleIdentifier: String?
+    ) -> Bool {
+        settings.navigationEnabled
+            && !settings.navigationIsDisabled(in: targetBundleIdentifier)
+            && frontmostBundleIdentifier.map(settings.navigationIsDisabled(in:)) != true
+    }
+
+    @discardableResult
+    private func postSwipeGesture(_ navigationDirection: NavigationDirection) -> Bool {
+        let direction = Self.swipeGestureDirection(for: navigationDirection)
         guard let begin = GestureEvent.make(phase: 1, direction: 0),
               let swipe = GestureEvent.make(phase: 4, direction: direction) else {
             statusMessage = "Kaygan couldn't create a navigation gesture."
@@ -59,11 +148,15 @@ final class NavigationEngine {
         statusMessage = nil
         return true
     }
+
+    nonisolated static func swipeGestureDirection(for direction: NavigationDirection) -> UInt32 {
+        direction == .back ? GestureSwipe.back : GestureSwipe.forward
+    }
 }
 
 private enum GestureSwipe {
-    static let left: UInt32 = 4
-    static let right: UInt32 = 8
+    static let back: UInt32 = 4
+    static let forward: UInt32 = 8
 }
 
 private enum GestureEvent {
