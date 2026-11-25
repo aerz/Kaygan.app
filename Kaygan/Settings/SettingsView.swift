@@ -74,7 +74,6 @@ struct SettingsView: View {
         .frame(width: 700, height: 520)
         .background(Palette.canvas)
         .preferredColorScheme(.dark)
-        .background(SettingsWindowChrome().allowsHitTesting(false))
         .background {
             SettingsInputMonitor { isKeyboardInput in
                 guard isKeyboardInputActive != isKeyboardInput else { return }
@@ -212,108 +211,61 @@ private final class SettingsInputMonitorView: NSView {
 }
 
 @MainActor
-private struct SettingsWindowChrome: NSViewRepresentable {
-    func makeNSView(context: Context) -> SettingsWindowChromeView {
-        SettingsWindowChromeView()
+final class SettingsWindowController: NSObject, NSWindowDelegate {
+    private let settings: AppSettings
+    private let recorder: MouseButtonRecorder
+    private let navigation: NavigationEngine
+    private let generalSettings: GeneralSettingsModel
+    private var window: NSWindow?
+
+    init(
+        settings: AppSettings,
+        recorder: MouseButtonRecorder,
+        navigation: NavigationEngine,
+        generalSettings: GeneralSettingsModel
+    ) {
+        self.settings = settings
+        self.recorder = recorder
+        self.navigation = navigation
+        self.generalSettings = generalSettings
+        super.init()
     }
 
-    func updateNSView(_ view: SettingsWindowChromeView, context: Context) {
-        view.scheduleWindowConfiguration()
-    }
-
-    static func dismantleNSView(_ view: SettingsWindowChromeView, coordinator: ()) {
-        view.removeWindowObservers()
-    }
-}
-
-@MainActor
-private final class SettingsWindowChromeView: NSView {
-    private weak var observedWindow: NSWindow?
-    private var pendingConfiguration: DispatchWorkItem?
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        removeWindowObservers()
-
-        guard let window else { return }
-        observedWindow = window
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidBecomeKey(_:)),
-            name: NSWindow.didBecomeKeyNotification,
-            object: window
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowWillClose(_:)),
-            name: NSWindow.willCloseNotification,
-            object: window
-        )
-        scheduleWindowConfiguration()
-    }
-
-    func scheduleWindowConfiguration() {
-        guard let window, observedWindow === window, pendingConfiguration == nil else { return }
-
-        // Apply after SwiftUI's current window update, coalescing requests from the same pass.
-        let workItem = DispatchWorkItem { [weak self, weak window] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.pendingConfiguration = nil
-                guard let window, self.window === window, self.observedWindow === window else { return }
-                self.configureWindow(window)
-            }
+    func show() {
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+            return
         }
-        pendingConfiguration = workItem
-        DispatchQueue.main.async(execute: workItem)
+
+        let hosting = NSHostingController(
+            rootView: SettingsView(
+                settings: settings,
+                recorder: recorder,
+                navigation: navigation,
+                generalSettings: generalSettings
+            )
+        )
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Kaygan Settings"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.backgroundColor = NSColor(calibratedWhite: Palette.canvasLevel, alpha: 1)
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace]
+        window.setContentSize(NSSize(width: 700, height: 520))
+        window.center()
+        window.delegate = self
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
     }
 
-    func removeWindowObservers() {
-        cancelWindowConfiguration()
-        NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: observedWindow)
-        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: observedWindow)
-        observedWindow = nil
-    }
-
-    private func cancelWindowConfiguration() {
-        pendingConfiguration?.cancel()
-        pendingConfiguration = nil
-    }
-
-    @objc private func windowDidBecomeKey(_ notification: Notification) {
-        scheduleWindowConfiguration()
-    }
-
-    @objc private func windowWillClose(_ notification: Notification) {
-        cancelWindowConfiguration()
+    func windowWillClose(_ notification: Notification) {
+        window = nil
         if NSApp.activationPolicy() != .accessory,
            !NSApp.setActivationPolicy(.accessory) {
             KayganLogger.app.error("Could not change activation policy to accessory when closing Settings")
-        }
-    }
-
-    private func configureWindow(_ window: NSWindow) {
-        let requiredStyle: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-        let style = window.styleMask.union(requiredStyle)
-        if window.styleMask != style {
-            window.styleMask = style
-        }
-
-        let backgroundColor = NSColor(calibratedWhite: Palette.canvasLevel, alpha: 1)
-        if window.backgroundColor != backgroundColor {
-            window.backgroundColor = backgroundColor
-        }
-        if !window.title.isEmpty {
-            window.title = ""
-        }
-        if window.titleVisibility != .hidden {
-            window.titleVisibility = .hidden
-        }
-        if !window.titlebarAppearsTransparent {
-            window.titlebarAppearsTransparent = true
-        }
-        if window.titlebarSeparatorStyle != .none {
-            window.titlebarSeparatorStyle = .none
         }
     }
 }

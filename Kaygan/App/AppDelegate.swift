@@ -33,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var accessibilityTimer: Timer?
     private var accessibilityGranted = false
     private var presentingFailure = false
+    private lazy var settingsWindowController = SettingsWindowController(
+        settings: settings,
+        recorder: buttonRecorder,
+        navigation: navigationEngine,
+        generalSettings: generalSettings
+    )
 
     private(set) var state: KayganState = .waitingForAccessibility
 
@@ -97,6 +103,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityTimer?.invalidate()
         accessibilityTimer = nil
         engine.stop()
+    }
+
+    func showSettings() {
+        if NSApp.activationPolicy() != .regular,
+           !NSApp.setActivationPolicy(.regular) {
+            KayganLogger.app.error("Could not change activation policy to regular when opening Settings")
+        }
+        NSApp.activate()
+        settingsWindowController.show()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

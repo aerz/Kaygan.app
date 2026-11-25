@@ -7,7 +7,7 @@ struct KayganApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            KayganMenuBarContent()
+            KayganMenuBarContent(appDelegate: appDelegate)
         } label: {
             Image("MenuBarIcon")
                 .renderingMode(.template)
@@ -17,29 +17,23 @@ struct KayganApp: App {
                 .accessibilityLabel("Kaygan")
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView(
-                settings: appDelegate.settings,
-                recorder: appDelegate.buttonRecorder,
-                navigation: appDelegate.navigationEngine,
-                generalSettings: appDelegate.generalSettings
-            )
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    appDelegate.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }
 
 private struct KayganMenuBarContent: View {
-    @Environment(\.openSettings) private var openSettings
+    let appDelegate: AppDelegate
 
     var body: some View {
         Button("Settings…") {
-            if NSApp.activationPolicy() != .regular,
-               !NSApp.setActivationPolicy(.regular) {
-                KayganLogger.app.error("Could not change activation policy to regular when opening Settings")
-            }
-            NSApp.activate()
-            openSettings()
+            appDelegate.showSettings()
         }
 
         Divider()
