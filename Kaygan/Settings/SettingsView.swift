@@ -387,7 +387,7 @@ private struct ButtonDetectionRow: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(Palette.textSecondary)
                     .lineLimit(2)
-                    .frame(height: 30, alignment: .topLeading)
+                    .frame(height: 34, alignment: .topLeading)
             }
 
             Spacer(minLength: SettingsSpacing.inline)
@@ -416,8 +416,7 @@ private struct ButtonDetectionRow: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(title))
-            .accessibilityValue(Text(badge.title))
+            .accessibilityLabel(Text("\(title), \(badge.title)"))
             .accessibilityHint(Text(accessibilityHint))
         }
     }
@@ -1007,27 +1006,28 @@ private struct NavigationSettingsView: View {
             PaneHeader(
                 systemImage: nil,
                 title: "Navigation",
-                detail: "Use the side buttons to move back and forward through history."
+                detail: "Go back and forward with your mouse’s side buttons."
             )
 
             SettingsGroup {
                 VStack(alignment: .leading, spacing: SettingsSpacing.row) {
                     SettingsToggleRow(
                         title: "Enable side-button navigation",
-                        isOn: navigationEnabled,
-                        caption: "Go back or forward with your mouse’s side buttons."
+                        isOn: navigationEnabled
                     )
 
                     SettingsToggleRow(
-                        title: "Reverse button directions",
+                        title: "Swap back and forward",
                         isOn: reverseNavigation,
+                        caption: "Exchange which side button goes back and which goes forward.",
                         disabled: !settings.navigationEnabled
                     )
 
                     if let statusMessage = navigation.statusMessage {
                         Text(statusMessage)
                             .font(.system(size: 12.5))
-                            .foregroundStyle(Palette.textSecondary)
+                            .foregroundStyle(Palette.warning)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -1050,56 +1050,75 @@ private struct NavigationSettingsView: View {
                 }
             }
         }
+        .onAppear {
+            navigation.refreshPermission()
+        }
+    }
+
+    private var testState: SideButtonTestState {
+        SideButtonTestState.resolve(
+            detectedButton: detectedButton,
+            isCapturing: recorder.isCapturing,
+            isCaptureUnavailable: recorder.isCaptureUnavailable,
+            scrollButton: settings.button,
+            navigationEnabled: settings.navigationEnabled,
+            reverseNavigation: settings.reverseNavigation
+        )
     }
 
     private var testStatus: DetectionBadge {
-        if recorder.isCaptureUnavailable {
-            return DetectionBadge(title: "Detection unavailable", symbol: "xmark.circle.fill", color: Palette.error)
-        }
-
-        if recorder.isCapturing {
+        switch testState {
+        case .unavailable:
+            return DetectionBadge(title: "Test unavailable", symbol: "xmark.circle.fill", color: Palette.error)
+        case .detecting:
             return DetectionBadge(title: "Detecting…", symbol: nil, color: Palette.textSecondary)
+        case .scroll:
+            return DetectionBadge(title: "Scroll button", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
+        case .navigationOff:
+            return DetectionBadge(title: "Navigation off", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
+        case .back:
+            return DetectionBadge(title: "Back", symbol: "checkmark.circle.fill", color: Palette.success)
+        case .forward:
+            return DetectionBadge(title: "Forward", symbol: "checkmark.circle.fill", color: Palette.success)
+        case .unused:
+            return DetectionBadge(title: "No action", symbol: "minus.circle.fill", color: Palette.textSecondary)
+        case .idle:
+            return DetectionBadge(title: "Test buttons", symbol: "dot.radiowaves.left.and.right", color: Palette.textSecondary)
         }
-
-        if let detectedButton {
-            if (4...5).contains(detectedButton) {
-                return DetectionBadge(title: "Button \(detectedButton) detected", symbol: "checkmark.circle.fill", color: Palette.success)
-            }
-
-            return DetectionBadge(title: "Button \(detectedButton)", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
-        }
-
-        return DetectionBadge(title: "Test buttons", symbol: "dot.radiowaves.left.and.right", color: Palette.textSecondary)
     }
 
     private var testDescription: String {
-        if recorder.isCaptureUnavailable {
-            return "Could not start button detection."
+        switch testState {
+        case .unavailable:
+            "Kaygan couldn’t listen for mouse buttons. Check Accessibility access."
+        case .detecting:
+            "Press a side button, or press Escape to cancel."
+        case .scroll:
+            "This button is set to scrolling, so it won’t navigate."
+        case .navigationOff:
+            "Turn on side-button navigation to use this button."
+        case .back:
+            "This button is set to go back."
+        case .forward:
+            "This button is set to go forward."
+        case .unused:
+            "Kaygan doesn’t use this button for scrolling or navigation."
+        case .idle:
+            "Click Test buttons, then press a side button to see what it does."
         }
-
-        if recorder.isCapturing {
-            return "Press a side button… Esc cancels."
-        }
-
-        if let detectedButton {
-            return (4...5).contains(detectedButton)
-                ? "Button \(detectedButton) is mapped to Navigation."
-                : "Button \(detectedButton) is not mapped to Navigation."
-        }
-
-        return "Click Test buttons, then press a side button."
     }
 
     private var testAccessibilityHint: String {
-        if recorder.isCapturing {
-            return "Click to cancel the test. Press Escape to cancel."
+        switch testState {
+        case .detecting:
+            "Click to cancel. Escape also cancels."
+        case .unavailable:
+            "Click to try again."
+        case .idle:
+            "Click to start testing a mouse button."
+        default:
+            "Click to test another button."
         }
-
-        if recorder.isCaptureUnavailable {
-            return "Click to retry button detection."
-        }
-
-        return "Click to test which auxiliary mouse button Kaygan receives."
     }
 
     private var navigationEnabled: Binding<Bool> {

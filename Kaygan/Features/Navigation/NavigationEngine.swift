@@ -79,7 +79,7 @@ final class NavigationEngine {
 
         refreshPermission()
         guard hasPostEventAccess else {
-            statusMessage = "Allow Kaygan to post events in System Settings > Privacy & Security > Accessibility."
+            statusMessage = "Accessibility access is required. Open General and click Request Access."
             return false
         }
 
@@ -139,7 +139,7 @@ final class NavigationEngine {
         let direction = Self.swipeGestureDirection(for: navigationDirection)
         guard let begin = GestureEvent.make(phase: 1, direction: 0),
               let swipe = GestureEvent.make(phase: 4, direction: direction) else {
-            statusMessage = "Kaygan couldn't create a navigation gesture."
+            statusMessage = "Kaygan couldn’t go back or forward in this app. Try again."
             return false
         }
 
