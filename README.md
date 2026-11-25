@@ -6,7 +6,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/images/02-scrolling.jpeg" alt="Kaygan Scrolling settings with mouse button detection, speed, reverse direction and click-to-toggle controls" width="800">
+  <img src="docs/images/02-scrolling.png" alt="Kaygan Scrolling settings with scroll button detection, speed, reverse direction, click-to-toggle and normal button action controls" width="800">
 </p>
 
 ## What you can do
@@ -17,8 +17,8 @@
 - **Choose your apps.** Disable scrolling, navigation or both per app.
 
 <p align="center">
-  <a href="docs/images/03-navigation.jpeg"><img src="docs/images/03-navigation.jpeg" alt="Navigation settings with side-button navigation, reverse directions and a button test" width="390"></a>
-  <a href="docs/images/01-general.jpeg"><img src="docs/images/01-general.jpeg" alt="General settings with Accessibility access, Launch at Login and disabled apps" width="390"></a>
+  <a href="docs/images/03-navigation.png"><img src="docs/images/03-navigation.png" alt="Navigation settings with side-button navigation, reverse directions and a button test" width="390"></a>
+  <a href="docs/images/01-general.png"><img src="docs/images/01-general.png" alt="General settings with Accessibility access, Launch at Login and disabled apps" width="390"></a>
 </p>
 
 ## Getting started
