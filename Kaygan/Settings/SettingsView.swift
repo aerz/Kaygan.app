@@ -431,7 +431,9 @@ private struct ScrollingSettingsView: View {
             PaneHeader(
                 systemImage: nil,
                 title: "Scrolling",
-                detail: "Move your mouse while holding the configured button, or click it to toggle scrolling."
+                detail: settings.toggle
+                    ? "Move your mouse while holding the scroll button, or click it to start and stop scrolling."
+                    : "Move your mouse while holding the scroll button."
             )
 
             SettingsGroup {
@@ -446,7 +448,7 @@ private struct ScrollingSettingsView: View {
 
     private var activation: some View {
         ButtonDetectionRow(
-            title: "Mouse button",
+            title: "Scroll button",
             description: buttonDescription,
             badge: buttonStatus,
             accessibilityHint: buttonAccessibilityHint
@@ -464,7 +466,7 @@ private struct ScrollingSettingsView: View {
 
     private var buttonStatus: DetectionBadge {
         if recorder.isCaptureUnavailable {
-            return DetectionBadge(title: "Detection unavailable", symbol: "xmark.circle.fill", color: Palette.error)
+            return DetectionBadge(title: "Can’t detect", symbol: "xmark.circle.fill", color: Palette.error)
         }
 
         if recorder.isCapturing {
@@ -479,35 +481,39 @@ private struct ScrollingSettingsView: View {
             return DetectionBadge(title: buttonName, symbol: "checkmark.circle.fill", color: Palette.success)
         }
 
-        return DetectionBadge(title: "Default (\(buttonName))", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
+        return DetectionBadge(title: "Default \(buttonName.lowercased())", symbol: "exclamationmark.triangle.fill", color: Palette.warning)
     }
 
     private var buttonAccessibilityHint: String {
         if recorder.isCapturing {
-            return "Click to cancel detection. Press Escape to cancel."
+            return "Click to cancel. Escape also cancels."
         }
 
         if recorder.isCaptureUnavailable {
-            return "Click to retry detection. The current button setting is unchanged."
+            return "Click to try again."
         }
 
-        return "Click to detect or change the scrolling button."
+        return "Click to change the scroll button."
     }
 
     private var buttonDescription: String {
         if recorder.isCaptureUnavailable {
-            return "Could not start detection. The current button is unchanged."
+            return "Kaygan couldn’t listen for mouse buttons. Your setting is unchanged."
         }
 
         if recorder.isCapturing {
-            return "Press a middle or side button… Esc cancels."
+            return "Press the button you use to scroll, or press Escape to cancel."
+        }
+
+        if settings.button == 0 {
+            return "Click, then press the button you want to use for scrolling."
         }
 
         if settings.isButtonConfigured {
-            return "Click the field to detect a different button."
+            return "Use this button to scroll. Click to change it."
         }
 
-        return "This default may not work with your mouse."
+        return "This may not match your mouse. Click to set your own."
     }
 
     private var scrolling: some View {
@@ -544,19 +550,24 @@ private struct ScrollingSettingsView: View {
             SettingsToggleRow(
                 title: "Click to toggle scrolling",
                 isOn: toggle,
-                caption: "Click the configured button once to start, and again to stop."
+                caption: "Click the scroll button once to start, and again to stop."
             )
 
             SettingsToggleRow(
                 title: "Disable normal button actions",
                 isOn: disableButtonClickActions,
-                caption: "Use the button only for scrolling."
+                caption: "Use the scroll button only for scrolling."
             )
         }
     }
 
     private var buttonName: String {
-        settings.button == 0 ? "Disabled" : "Button \(settings.button)"
+        switch settings.button {
+        case 0: "Disabled"
+        case 3: "Middle button"
+        case 4, 5: "Side button"
+        default: "Mouse button"
+        }
     }
 
     private var speed: Binding<Double> {
@@ -660,7 +671,7 @@ private struct GeneralSettingsView: View {
                 PaneHeader(
                     systemImage: nil,
                     title: "General",
-                    detail: "Manage Accessibility access and decide whether Kaygan opens when you sign in."
+                    detail: "Manage access, login, and apps where Kaygan is off."
                 )
 
                 SettingsGroup {
@@ -706,7 +717,7 @@ private struct GeneralSettingsView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Palette.textPrimary)
 
-                    Text("Kaygan uses this access to handle mouse gestures and post scroll and navigation events.")
+                    Text("Kaygan uses this to read your mouse buttons and send scroll and back/forward commands.")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -724,7 +735,7 @@ private struct GeneralSettingsView: View {
                     GeneralActionButton(title: "Request Access") {
                         model.requestAccessibility()
                     }
-                    .accessibilityHint("Ask macOS to let Kaygan use Accessibility features.")
+                    .accessibilityHint("Open the macOS prompt to allow Kaygan.")
                 }
             }
         }
@@ -755,10 +766,15 @@ private struct GeneralSettingsView: View {
             }
 
             if let errorMessage = model.launchAtLoginErrorMessage {
-                Text("Could not update Login Items: \(errorMessage)")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.error)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: SettingsSpacing.compact) {
+                    Text("Couldn’t update launch at login. \(errorMessage)")
+                        .foregroundStyle(Palette.error)
+
+                    Text("You can change it in System Settings > General > Login Items.")
+                        .foregroundStyle(Palette.textSecondary)
+                }
+                .font(.system(size: 12.5))
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -788,9 +804,10 @@ private struct GeneralSettingsView: View {
                 .overlay(Palette.hover)
 
             if settings.appExclusions.isEmpty {
-                Text("No apps added.")
+                Text("Kaygan runs in all apps by default. Add an app to turn it off there.")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 LazyVStack(spacing: SettingsSpacing.row) {
                     ForEach(settings.appExclusions) { exclusion in
@@ -816,7 +833,7 @@ private struct GeneralSettingsView: View {
         panel.resolvesAliases = true
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
         panel.prompt = "Add App"
-        panel.message = "Choose an app to disable Kaygan features in."
+        panel.message = "Choose an app where Kaygan should be off."
 
         let completionHandler: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
