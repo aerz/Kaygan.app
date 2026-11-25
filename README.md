@@ -64,7 +64,7 @@ open Kaygan.xcodeproj
 
 In Xcode, select the **Kaygan** scheme and **My Mac**, then run the app. Kaygan starts in the menu bar without opening a window.
 
-Signing defaults live in [`Config/Signing.xcconfig`](Config/Signing.xcconfig). If your development team differs, update it and regenerate the project. For a stable local identity, copy [`Config/Signing.local.xcconfig.example`](Config/Signing.local.xcconfig.example) to `Config/Signing.local.xcconfig` and set `CODE_SIGN_IDENTITY`. That file is ignored by git, and it keeps Debug builds in `build/Debug` so macOS keeps the Accessibility grant across rebuilds.
+Signing defaults live in [`Config/Signing.xcconfig`](Config/Signing.xcconfig). To use a different development team or a self-signed identity, copy [`Config/Signing.local.xcconfig.example`](Config/Signing.local.xcconfig.example) to `Config/Signing.local.xcconfig` and adjust `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM`, and `CODE_SIGN_IDENTITY` as needed. That file is ignored by git, and it keeps Debug builds in `build/Debug` so macOS keeps the Accessibility grant across rebuilds.
 
 <details>
 <summary>Command-line builds and tests</summary>
